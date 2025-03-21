@@ -155,7 +155,7 @@ function Rooms() {
                             Booked {room.bookingCount} times
                           </Typography>
                           <Box sx={{ mt: 1 }}>
-                            {room.equipment.slice(0, 3).map((item, index) => (
+                            {(room.equipment || []).slice(0, 3).map((item, index) => (
                               <Chip 
                                 key={index} 
                                 label={item} 
@@ -164,9 +164,9 @@ function Rooms() {
                                 sx={{ mr: 0.5, mb: 0.5 }} 
                               />
                             ))}
-                            {room.equipment.length > 3 && (
+                            {(room.equipment?.length || 0) > 3 && (
                               <Chip 
-                                label={`+${room.equipment.length - 3} more`} 
+                                label={`+${(room.equipment?.length || 0) - 3} more`} 
                                 size="small" 
                                 sx={{ mb: 0.5 }} 
                               />
@@ -238,7 +238,7 @@ function Rooms() {
                           Capacity: {room.capacity} people
                         </Typography>
                         <Box sx={{ mt: 1 }}>
-                          {room.equipment && room.equipment.map((item, index) => (
+                          {(room.equipment || []).map((item, index) => (
                             <Chip 
                               key={index} 
                               label={item} 
@@ -247,9 +247,9 @@ function Rooms() {
                               sx={{ mr: 0.5, mb: 0.5 }} 
                             />
                           ))}
-                          {room.equipment.length > 3 && (
+                          {(room.equipment?.length || 0) > 3 && (
                             <Chip 
-                              label={`+${room.equipment.length - 3} more`} 
+                              label={`+${(room.equipment?.length || 0) - 3} more`} 
                               size="small" 
                               sx={{ mb: 0.5 }} 
                             />

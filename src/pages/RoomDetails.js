@@ -56,7 +56,7 @@ function RoomDetails() {
               
               <Typography variant="h6" sx={{ mt: 2 }}>Equipment</Typography>
               <Box>
-                {room.equipment.map((item, index) => (
+                {(room.equipment || []).map((item, index) => (
                   <Chip 
                     key={index} 
                     label={item} 
@@ -64,6 +64,11 @@ function RoomDetails() {
                     sx={{ mr: 0.5, mb: 0.5 }} 
                   />
                 ))}
+                {(room.equipment?.length || 0) === 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    No equipment specified
+                  </Typography>
+                )}
               </Box>
             </Grid>
             
