@@ -14,18 +14,31 @@ function AdminPage() {
  
   useEffect(() => {
     const checkAdmin = async () => {
+      console.log("Checking admin status...");
+      
       if (!currentUser) {
+        console.log("No user is signed in");
         setIsAdmin(false);
         setLoading(false);
         return;
       }
-     
+      
+      console.log("Current user email:", currentUser.email);
+      
       try {
+        // Make email lowercase to handle case sensitivity
+        const adminEmail = currentUser.email.toLowerCase();
+        console.log("Looking for admin document with ID:", adminEmail);
+        
         // Check if user is in admins collection
-        const adminRef = doc(db, 'admin', currentUser.email);
+        const adminRef = doc(db, 'admin', adminEmail);
         const adminSnap = await getDoc(adminRef);
-       
+        
+        console.log("Admin document exists:", adminSnap.exists());
+        
         setIsAdmin(adminSnap.exists());
+        // Add this right after your setIsAdmin line for testing
+        
         setLoading(false);
       } catch (error) {
         console.error("Error checking admin status:", error);
@@ -33,7 +46,7 @@ function AdminPage() {
         setLoading(false);
       }
     };
-   
+    
     checkAdmin();
   }, [currentUser]);
  
