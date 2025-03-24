@@ -134,7 +134,7 @@ export const getUserReservations = async (userId) => {
   }
 };
 
-// Cancel a reservation
+// Cancel a reservation ( this is a test )
 export const cancelReservation = async (reservationId) => {
   try {
     const reservationRef = doc(db, 'reservations', reservationId);
