@@ -26,12 +26,12 @@ function Home() {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
   // For demo purposes only - in a real application, these would be environment variables or imported
-  // These are references to the campus images you provided
+  // These are references to the campus images
   const campusImages = {
-    ritCampus1: "/campus-image-1.jpg", // Path to Image 1 of brick buildings
-    ritCampus2: "/campus-image-2.jpg", // Path to Image 2 aerial view
-    ritCampus3: "/campus-image-3.jpg", // Path to Image 3 modern glass building
-    ritCampus4: "/campus-image-4.jpg", // Path to Image 4 campus paths and greenery
+    ritCampus1: "public/images/campus-image-1.jpg", // Path to Image 1 of brick buildings
+    ritCampus2: "public/images/campus-image-2.jpg", // Path to Image 2 aerial view
+    ritCampus3: "public/images/campus-image-3.jpg", // Path to Image 3 modern glass building
+    ritCampus4: "public/images/campus-image-4.jpg", // Path to Image 4 campus paths and greenery
   };
   
   return (

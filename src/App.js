@@ -16,7 +16,6 @@ import MyReservations from './pages/MyReservations';
 import Login from './components/auth/Login';
 import PrivateRoute from './components/auth/PrivateRoute';
 import { AuthProvider } from './contexts/AuthContext';
-import theme from './theme';
 
 
 function App() {
