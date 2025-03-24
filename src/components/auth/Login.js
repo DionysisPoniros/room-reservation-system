@@ -13,8 +13,7 @@ import {
   InputAdornment,
   IconButton,
   useTheme,
-  useMediaQuery,
-  alpha
+  useMediaQuery
 } from '@mui/material';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -23,7 +22,6 @@ import EmailIcon from '@mui/icons-material/Email';
 import LockIcon from '@mui/icons-material/Lock';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
-import SchoolIcon from '@mui/icons-material/School';
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -35,6 +33,9 @@ function Login() {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  // Campus image path - this would be imported or loaded from environment in a real app
+  const campusImagePath = "/campus-image-1.jpg"; // Use one of the uploaded campus images
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -63,235 +64,233 @@ function Login() {
         display: 'flex',
         alignItems: 'center',
         py: 8,
-        bgcolor: alpha(theme.palette.primary.main, 0.03)
+        bgcolor: '#f5f5f5'
       }}
     >
       <Container maxWidth="lg">
-        <Grid container spacing={3} justifyContent="center">
-          <Grid item xs={12} md={6} lg={5}>
+        <Grid container spacing={0} justifyContent="center">
+          <Grid item xs={12} md={10} lg={8}>
             <Paper 
-              elevation={3} 
+              elevation={2} 
               sx={{ 
-                borderRadius: 3,
+                borderRadius: 1,
                 overflow: 'hidden',
-                boxShadow: '0 8px 40px rgba(0,0,0,0.12)'
+                display: 'flex',
+                flexDirection: { xs: 'column', md: 'row' }
               }}
             >
-              <Grid container>
-                {!isMobile && (
-                  <Grid 
-                    item 
-                    xs={4}
-                    sx={{ 
-                      bgcolor: theme.palette.primary.main,
+              {/* Left side with campus image */}
+              {!isMobile && (
+                <Box 
+                  sx={{ 
+                    flex: '0 0 50%',
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}
+                >
+                  <Box 
+                    component="img"
+                    src={campusImagePath}
+                    alt="RIT Campus"
+                    sx={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                    }}
+                  />
+                  <Box 
+                    sx={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: '100%',
+                      bgcolor: 'rgba(0, 0, 0, 0.4)',
                       display: 'flex',
-                      flexDirection: 'column',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: 'white',
-                      p: 3,
-                      position: 'relative',
-                      overflow: 'hidden'
+                      flexDirection: 'column',
+                      p: 4,
+                      color: 'white'
                     }}
                   >
-                    {/* Background pattern */}
-                    <Box 
-                      sx={{
-                        position: 'absolute',
-                        right: -40,
-                        top: -40,
-                        width: 120,
-                        height: 120,
-                        borderRadius: '50%',
-                        background: alpha('#fff', 0.1),
-                        zIndex: 0
-                      }}
-                    />
-                    <Box 
-                      sx={{
-                        position: 'absolute',
-                        left: -20,
-                        bottom: -20,
-                        width: 80,
-                        height: 80,
-                        borderRadius: '50%',
-                        background: alpha('#fff', 0.1),
-                        zIndex: 0
-                      }}
-                    />
-                    
-                    <SchoolIcon sx={{ fontSize: 45, mb: 2, position: 'relative', zIndex: 1 }} />
                     <Typography 
-                      variant="h5" 
-                      component="h2" 
+                      variant="h4" 
+                      component="h1" 
                       sx={{ 
-                        fontWeight: 700,
-                        textAlign: 'center',
+                        fontWeight: 700, 
                         mb: 2,
-                        position: 'relative',
-                        zIndex: 1
+                        textAlign: 'center'
                       }}
                     >
-                      Welcome Back
+                      Welcome to RIT
                     </Typography>
                     <Typography 
-                      variant="body2" 
+                      variant="body1" 
                       sx={{ 
                         textAlign: 'center',
-                        opacity: 0.8,
-                        position: 'relative',
-                        zIndex: 1
-                      }}
-                    >
-                      Log in to continue managing your room reservations
-                    </Typography>
-                  </Grid>
-                )}
-                
-                <Grid item xs={12} sm={isMobile ? 12 : 8}>
-                  <Box 
-                    sx={{ 
-                      p: { xs: 3, sm: 4 }, 
-                      display: 'flex', 
-                      flexDirection: 'column'
-                    }}
-                  >
-                    <Box 
-                      sx={{ 
-                        display: 'flex', 
-                        flexDirection: 'column',
-                        alignItems: 'center',
+                        maxWidth: 300,
                         mb: 4
                       }}
                     >
-                      <Typography 
-                        component="h1" 
-                        variant="h4" 
-                        sx={{ 
-                          fontWeight: 700, 
-                          mb: 1,
-                          color: theme.palette.primary.main
-                        }}
-                      >
-                        Login
-                      </Typography>
-                      <Typography 
-                        variant="body2" 
-                        color="text.secondary"
-                        align="center"
-                      >
-                        Enter your credentials to access your account
-                      </Typography>
-                    </Box>
+                      Log in to access the Dynamic Room Reservation System
+                    </Typography>
                     
-                    {error && (
-                      <Alert 
-                        severity="error" 
-                        sx={{ 
-                          width: '100%', 
-                          mb: 3,
-                          borderRadius: 2
-                        }}
-                      >
-                        {error}
-                      </Alert>
-                    )}
-                    
+                    {/* RIT logo or branding element could go here */}
                     <Box 
-                      component="form" 
-                      onSubmit={handleSubmit} 
-                      sx={{ width: '100%' }}
+                      sx={{ 
+                        p: 2, 
+                        borderRadius: 1, 
+                        bgcolor: 'rgba(255, 255, 255, 0.9)',
+                        color: theme.palette.primary.main,
+                        fontWeight: 800,
+                        fontSize: '2rem'
+                      }}
                     >
-                      <TextField
-                        margin="normal"
-                        required
-                        fullWidth
-                        id="email"
-                        label="Email Address"
-                        name="email"
-                        autoComplete="email"
-                        autoFocus
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        InputProps={{
-                          startAdornment: (
-                            <InputAdornment position="start">
-                              <EmailIcon color="action" />
-                            </InputAdornment>
-                          ),
-                        }}
-                        sx={{ mb: 3 }}
-                      />
-                      
-                      <TextField
-                        margin="normal"
-                        required
-                        fullWidth
-                        name="password"
-                        label="Password"
-                        type={showPassword ? 'text' : 'password'}
-                        id="password"
-                        autoComplete="current-password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        InputProps={{
-                          startAdornment: (
-                            <InputAdornment position="start">
-                              <LockIcon color="action" />
-                            </InputAdornment>
-                          ),
-                          endAdornment: (
-                            <InputAdornment position="end">
-                              <IconButton
-                                aria-label="toggle password visibility"
-                                onClick={handleClickShowPassword}
-                                edge="end"
-                              >
-                                {showPassword ? <VisibilityOff /> : <Visibility />}
-                              </IconButton>
-                            </InputAdornment>
-                          )
-                        }}
-                        sx={{ mb: 4 }}
-                      />
-                      
-                      <Button
-                        type="submit"
-                        fullWidth
-                        variant="contained"
-                        size="large"
-                        sx={{ 
-                          py: 1.5,
-                          mb: 3,
-                          borderRadius: 2,
-                          fontWeight: 600
-                        }}
-                        disabled={loading}
-                      >
-                        {loading ? 'Signing In...' : 'Sign In'}
-                      </Button>
-                      
-                      <Box sx={{ textAlign: 'center' }}>
-                        <Typography 
-                          variant="body2" 
-                          color="text.secondary"
-                          sx={{ mb: 1 }}
-                        >
-                          Don't have an account?{' '}
-                          <Link to="/" style={{ color: theme.palette.primary.main, textDecoration: 'none', fontWeight: 600 }}>
-                            Register Here
-                          </Link>
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          <Link to="/" style={{ color: theme.palette.primary.main, textDecoration: 'none', fontWeight: 600 }}>
-                            Forgot Password?
-                          </Link>
-                        </Typography>
-                      </Box>
+                      RIT
                     </Box>
                   </Box>
-                </Grid>
-              </Grid>
+                </Box>
+              )}
+              
+              {/* Right side with login form */}
+              <Box 
+                sx={{ 
+                  flex: '0 0 50%',
+                  p: { xs: 3, md: 4 }, 
+                  display: 'flex', 
+                  flexDirection: 'column'
+                }}
+              >
+                <Box 
+                  sx={{ 
+                    mb: 4,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center'
+                  }}
+                >
+                  <Typography 
+                    component="h1" 
+                    variant="h4" 
+                    sx={{ 
+                      fontWeight: 700, 
+                      mb: 1,
+                      color: theme.palette.primary.main
+                    }}
+                  >
+                    Login
+                  </Typography>
+                  <Typography 
+                    variant="body2" 
+                    color="text.secondary"
+                    align="center"
+                  >
+                    Enter your RIT credentials to access your account
+                  </Typography>
+                </Box>
+                
+                {error && (
+                  <Alert 
+                    severity="error" 
+                    sx={{ 
+                      width: '100%', 
+                      mb: 3
+                    }}
+                  >
+                    {error}
+                  </Alert>
+                )}
+                
+                <Box 
+                  component="form" 
+                  onSubmit={handleSubmit} 
+                  sx={{ width: '100%' }}
+                >
+                  <TextField
+                    margin="normal"
+                    required
+                    fullWidth
+                    id="email"
+                    label="Email Address"
+                    name="email"
+                    autoComplete="email"
+                    autoFocus
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <EmailIcon color="action" />
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={{ mb: 3 }}
+                  />
+                  
+                  <TextField
+                    margin="normal"
+                    required
+                    fullWidth
+                    name="password"
+                    label="Password"
+                    type={showPassword ? 'text' : 'password'}
+                    id="password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <LockIcon color="action" />
+                        </InputAdornment>
+                      ),
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            aria-label="toggle password visibility"
+                            onClick={handleClickShowPassword}
+                            edge="end"
+                          >
+                            {showPassword ? <VisibilityOff /> : <Visibility />}
+                          </IconButton>
+                        </InputAdornment>
+                      )
+                    }}
+                    sx={{ mb: 4 }}
+                  />
+                  
+                  <Button
+                    type="submit"
+                    fullWidth
+                    variant="contained"
+                    size="large"
+                    sx={{ 
+                      py: 1.5,
+                      mb: 3,
+                      fontWeight: 600
+                    }}
+                    disabled={loading}
+                  >
+                    {loading ? 'Signing In...' : 'Sign In'}
+                  </Button>
+                  
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography 
+                      variant="body2" 
+                      color="text.secondary"
+                      sx={{ mb: 1 }}
+                    >
+                      Don't have an account? Contact IT Services
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      <Link to="/" style={{ color: theme.palette.primary.main, textDecoration: 'none', fontWeight: 600 }}>
+                        Forgot Password?
+                      </Link>
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
             </Paper>
           </Grid>
         </Grid>

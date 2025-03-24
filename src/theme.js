@@ -1,47 +1,43 @@
 // src/theme.js
 import { createTheme } from '@mui/material/styles';
 
-// University brand colors (adjust based on your university's actual colors)
-const primaryColor = '#8A2BE2'; // Rich purple
-const secondaryColor = '#FF5722'; // Vibrant orange
-const backgroundColor = '#f8f9fd'; // Light gray with blue tint
+// RIT brand colors
+const ritOrange = '#F76902'; // RIT Primary Orange
+const ritBrown = '#513127';  // Complementary to the brick buildings
+const ritWhite = '#FFFFFF';
+const ritGray = '#E6E6E6';
+const ritDarkGray = '#333333';
 
 const theme = createTheme({
   palette: {
     primary: {
-      main: primaryColor,
-      light: '#B86EFF',
-      dark: '#6A1B9A',
-      contrastText: '#FFFFFF',
+      main: ritOrange,
+      light: '#FF8A33',
+      dark: '#D45500',
+      contrastText: ritWhite,
     },
     secondary: {
-      main: secondaryColor,
-      light: '#FF8A65',
-      dark: '#D84315',
-      contrastText: '#FFFFFF',
+      main: ritBrown,
+      light: '#6E4639',
+      dark: '#3B241C',
+      contrastText: ritWhite,
     },
     background: {
-      default: backgroundColor,
-      paper: '#FFFFFF',
+      default: ritWhite,
+      paper: ritWhite,
     },
     text: {
-      primary: '#333333',
+      primary: ritDarkGray,
       secondary: '#555555',
     },
     success: {
       main: '#4CAF50',
-      light: '#81C784',
-      dark: '#388E3C',
     },
     info: {
-      main: '#29B6F6',
-      light: '#4FC3F7',
-      dark: '#0288D1',
+      main: '#2196F3',
     },
     error: {
       main: '#F44336',
-      light: '#E57373',
-      dark: '#D32F2F',
     },
   },
   typography: {
@@ -49,109 +45,58 @@ const theme = createTheme({
     h1: {
       fontWeight: 700,
       fontSize: '2.5rem',
-      lineHeight: 1.2,
     },
     h2: {
       fontWeight: 700,
       fontSize: '2rem',
-      lineHeight: 1.3,
     },
     h3: {
       fontWeight: 600,
       fontSize: '1.75rem',
-      lineHeight: 1.3,
     },
     h4: {
       fontWeight: 600,
       fontSize: '1.5rem',
-      lineHeight: 1.4,
     },
     h5: {
       fontWeight: 600,
       fontSize: '1.25rem',
-      lineHeight: 1.4,
     },
     h6: {
       fontWeight: 600,
       fontSize: '1.1rem',
-      lineHeight: 1.4,
     },
     button: {
       fontWeight: 500,
-      textTransform: 'none', // Avoid all-caps in buttons
+      textTransform: 'none', // Avoid all-caps in buttons for better readability
     },
   },
   shape: {
-    borderRadius: 8, // Slightly rounded corners
+    borderRadius: 4, // More conservative border radius for professional look
   },
-  shadows: [
-    'none',
-    '0px 2px 4px rgba(0, 0, 0, 0.05)',
-    '0px 4px 8px rgba(0, 0, 0, 0.05)',
-    '0px 8px 16px rgba(0, 0, 0, 0.05)',
-    // ... other shadow levels
-    '0px 16px 24px rgba(0, 0, 0, 0.09)',
-  ],
   components: {
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          borderRadius: 4,
           padding: '8px 16px',
           fontWeight: 500,
           boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
-          transition: 'all 0.2s ease-in-out',
-          '&:hover': {
-            transform: 'translateY(-2px)',
-            boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.12)',
-          },
-        },
-        contained: {
-          '&:hover': {
-            backgroundColor: primaryColor,
-          },
         },
       },
     },
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 12,
-          boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.05)',
-          transition: 'all 0.2s ease-in-out',
-          '&:hover': {
-            boxShadow: '0px 6px 16px rgba(0, 0, 0, 0.08)',
-          },
-        },
-      },
-    },
-    MuiPaper: {
-      styleOverrides: {
-        root: {
-          borderRadius: 12,
+          borderRadius: 4,
+          boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
         },
       },
     },
     MuiAppBar: {
       styleOverrides: {
         root: {
-          boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
-        },
-      },
-    },
-    MuiChip: {
-      styleOverrides: {
-        root: {
-          borderRadius: 8,
-        },
-      },
-    },
-    MuiTextField: {
-      styleOverrides: {
-        root: {
-          '& .MuiOutlinedInput-root': {
-            borderRadius: 8,
-          },
+          boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
         },
       },
     },

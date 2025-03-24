@@ -1,5 +1,5 @@
 // src/components/layout/Navbar.js
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   AppBar, 
   Toolbar, 
@@ -18,10 +18,7 @@ import {
   Divider,
   useMediaQuery,
   useTheme,
-  useScrollTrigger,
-  Container,
-  alpha,
-  Slide
+  Container
 } from '@mui/material';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -31,13 +28,10 @@ import HomeIcon from '@mui/icons-material/Home';
 import LoginIcon from '@mui/icons-material/Login';
 import LogoutIcon from '@mui/icons-material/Logout';
 import PersonIcon from '@mui/icons-material/Person';
-import DashboardIcon from '@mui/icons-material/Dashboard';
 import { useAuth } from '../../contexts/AuthContext';
 
-// Logo component
-const Logo = () => {
-  const theme = useTheme();
-  
+// RIT Logo component
+const RITLogo = () => {
   return (
     <Typography 
       variant="h5" 
@@ -45,31 +39,17 @@ const Logo = () => {
       sx={{ 
         fontWeight: 700,
         letterSpacing: 1,
-        background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
-        backgroundClip: 'text',
-        textFillColor: 'transparent',
-        WebkitBackgroundClip: 'text',
-        WebkitTextFillColor: 'transparent',
+        color: '#FFFFFF',
+        display: 'flex',
+        alignItems: 'center',
       }}
     >
-      DRRS
+      {/* You can replace this with an actual image of the RIT logo */}
+      {/* <img src="/rit-logo.png" alt="RIT Logo" height="32" /> */}
+      <span style={{ marginLeft: '8px' }}>RIT DRRS</span>
     </Typography>
   );
 };
-
-// Hide navbar on scroll down, show on scroll up
-function HideOnScroll(props) {
-  const { children } = props;
-  const trigger = useScrollTrigger({
-    threshold: 300, // Only hide after scrolling down 300px
-  });
-
-  return (
-    <Slide appear={false} direction="down" in={!trigger}>
-      {children}
-    </Slide>
-  );
-}
 
 function Navbar() {
   const { currentUser, logout } = useAuth();
@@ -83,23 +63,6 @@ function Navbar() {
   
   // For mobile drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
-  
-  // Determine if navbar should be transparent (only on homepage)
-  const isHomePage = location.pathname === '/';
-  const [scrolled, setScrolled] = useState(false);
-  
-  // Track scroll position for transparency effect on homepage
-  useEffect(() => {
-    if (!isHomePage) return;
-    
-    const handleScroll = () => {
-      const scrollPosition = window.scrollY;
-      setScrolled(scrollPosition > 10);
-    };
-    
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [isHomePage]);
   
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);
@@ -123,13 +86,6 @@ function Navbar() {
     handleClose();
   };
   
-  // Navbar styling based on scroll position and page
-  const navbarStyle = {
-    boxShadow: isHomePage && !scrolled ? 'none' : '0px 2px 8px rgba(0, 0, 0, 0.08)',
-    bgcolor: isHomePage && !scrolled ? 'transparent' : 'background.paper',
-    transition: 'all 0.3s ease',
-  };
-  
   // Active link indicator
   const isLinkActive = (path) => {
     return location.pathname === path;
@@ -139,7 +95,7 @@ function Navbar() {
   const drawerContent = (
     <Box 
       sx={{ 
-        width: 280,
+        width: 250,
         pt: 2
       }} 
       role="presentation" 
@@ -147,7 +103,15 @@ function Navbar() {
     >
       <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
         <Link to="/" style={{ color: 'inherit', textDecoration: 'none' }}>
-          <Logo />
+          <Typography 
+            variant="h5" 
+            sx={{ 
+              fontWeight: 700,
+              color: theme.palette.primary.main
+            }}
+          >
+            RIT DRRS
+          </Typography>
         </Link>
       </Box>
       <Divider sx={{ mb: 2 }} />
@@ -157,10 +121,9 @@ function Navbar() {
           component={Link} 
           to="/"
           sx={{ 
-            borderLeft: isLinkActive('/') ? `4px solid ${theme.palette.primary.main}` : '4px solid transparent',
-            bgcolor: isLinkActive('/') ? alpha(theme.palette.primary.main, 0.08) : 'transparent',
+            bgcolor: isLinkActive('/') ? `rgba(247, 105, 2, 0.08)` : 'transparent',
             '&:hover': {
-              bgcolor: alpha(theme.palette.primary.main, 0.05)
+              bgcolor: `rgba(247, 105, 2, 0.05)`
             }
           }}
         >
@@ -179,10 +142,9 @@ function Navbar() {
           component={Link} 
           to="/rooms"
           sx={{ 
-            borderLeft: isLinkActive('/rooms') ? `4px solid ${theme.palette.primary.main}` : '4px solid transparent',
-            bgcolor: isLinkActive('/rooms') ? alpha(theme.palette.primary.main, 0.08) : 'transparent',
+            bgcolor: isLinkActive('/rooms') ? `rgba(247, 105, 2, 0.08)` : 'transparent',
             '&:hover': {
-              bgcolor: alpha(theme.palette.primary.main, 0.05)
+              bgcolor: `rgba(247, 105, 2, 0.05)`
             }
           }}
         >
@@ -202,10 +164,9 @@ function Navbar() {
             component={Link} 
             to="/my-reservations"
             sx={{ 
-              borderLeft: isLinkActive('/my-reservations') ? `4px solid ${theme.palette.primary.main}` : '4px solid transparent',
-              bgcolor: isLinkActive('/my-reservations') ? alpha(theme.palette.primary.main, 0.08) : 'transparent',
+              bgcolor: isLinkActive('/my-reservations') ? `rgba(247, 105, 2, 0.08)` : 'transparent',
               '&:hover': {
-                bgcolor: alpha(theme.palette.primary.main, 0.05)
+                bgcolor: `rgba(247, 105, 2, 0.05)`
               }
             }}
           >
@@ -241,7 +202,7 @@ function Navbar() {
               onClick={handleLogout}
               sx={{
                 '&:hover': {
-                  bgcolor: alpha(theme.palette.error.main, 0.08)
+                  bgcolor: `rgba(244, 67, 54, 0.08)`
                 }
               }}
             >
@@ -259,10 +220,9 @@ function Navbar() {
             component={Link} 
             to="/login"
             sx={{ 
-              borderLeft: isLinkActive('/login') ? `4px solid ${theme.palette.primary.main}` : '4px solid transparent',
-              bgcolor: isLinkActive('/login') ? alpha(theme.palette.primary.main, 0.08) : 'transparent',
+              bgcolor: isLinkActive('/login') ? `rgba(247, 105, 2, 0.08)` : 'transparent',
               '&:hover': {
-                bgcolor: alpha(theme.palette.primary.main, 0.05)
+                bgcolor: `rgba(247, 105, 2, 0.05)`
               }
             }}
           >
@@ -282,194 +242,178 @@ function Navbar() {
   );
 
   return (
-    <HideOnScroll>
-      <AppBar 
-        position="sticky" 
-        sx={navbarStyle}
-        elevation={0}
-      >
-        <Container maxWidth="lg">
-          <Toolbar sx={{ px: { xs: 1, sm: 2 } }}>
-            {isMobile && (
-              <IconButton
-                color={isHomePage && !scrolled ? 'inherit' : 'default'}
-                aria-label="open drawer"
-                edge="start"
-                onClick={handleDrawerToggle}
-                sx={{ mr: 2 }}
-              >
-                <MenuIcon />
-              </IconButton>
-            )}
-            
-            <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
-              <Link to="/" style={{ color: 'inherit', textDecoration: 'none' }}>
-                <Logo />
-              </Link>
-            </Box>
-            
-            {!isMobile && (
-              <Box sx={{ display: 'flex' }}>
-                <Button 
-                  color={isHomePage && !scrolled ? 'inherit' : 'primary'} 
-                  component={Link} 
-                  to="/"
-                  sx={{ 
-                    mx: 1,
-                    position: 'relative',
-                    '&::after': isLinkActive('/') ? {
-                      content: '""',
-                      position: 'absolute',
-                      bottom: 0,
-                      left: '20%',
-                      width: '60%',
-                      height: '3px',
-                      bgcolor: 'primary.main',
-                      borderRadius: '2px'
-                    } : {}
-                  }}
-                >
-                  Home
-                </Button>
-                <Button 
-                  color={isHomePage && !scrolled ? 'inherit' : 'primary'} 
-                  component={Link} 
-                  to="/rooms"
-                  sx={{ 
-                    mx: 1,
-                    position: 'relative',
-                    '&::after': isLinkActive('/rooms') ? {
-                      content: '""',
-                      position: 'absolute',
-                      bottom: 0,
-                      left: '20%',
-                      width: '60%',
-                      height: '3px',
-                      bgcolor: 'primary.main',
-                      borderRadius: '2px'
-                    } : {}
-                  }}
-                >
-                  Rooms
-                </Button>
-                {currentUser && (
-                  <Button 
-                    color={isHomePage && !scrolled ? 'inherit' : 'primary'} 
-                    component={Link} 
-                    to="/my-reservations"
-                    sx={{ 
-                      mx: 1,
-                      position: 'relative',
-                      '&::after': isLinkActive('/my-reservations') ? {
-                        content: '""',
-                        position: 'absolute',
-                        bottom: 0,
-                        left: '20%',
-                        width: '60%',
-                        height: '3px',
-                        bgcolor: 'primary.main',
-                        borderRadius: '2px'
-                      } : {}
-                    }}
-                  >
-                    My Reservations
-                  </Button>
-                )}
-              </Box>
-            )}
-            
-            {currentUser ? (
-              <Box>
-                <IconButton
-                  aria-label="account of current user"
-                  aria-controls="menu-appbar"
-                  aria-haspopup="true"
-                  onClick={handleMenu}
-                  color={isHomePage && !scrolled ? 'inherit' : 'default'}
-                  sx={{ ml: 2 }}
-                >
-                  <Avatar sx={{ 
-                    width: 40, 
-                    height: 40, 
-                    bgcolor: 'primary.main',
-                    fontWeight: 600,
-                    transition: 'all 0.2s ease-in-out',
-                    '&:hover': {
-                      transform: 'scale(1.05)',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
-                    }
-                  }}>
-                    {currentUser.email.charAt(0).toUpperCase()}
-                  </Avatar>
-                </IconButton>
-                <Menu
-                  id="menu-appbar"
-                  anchorEl={anchorEl}
-                  keepMounted
-                  open={Boolean(anchorEl)}
-                  onClose={handleClose}
-                  PaperProps={{
-                    elevation: 2,
-                    sx: {
-                      borderRadius: 2,
-                      minWidth: 200,
-                      mt: 1.5,
-                      '& .MuiMenuItem-root': {
-                        px: 2,
-                        py: 1.5
-                      }
-                    }
-                  }}
-                  transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-                  anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-                >
-                  <MenuItem disabled>
-                    <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
-                      {currentUser.email}
-                    </Typography>
-                  </MenuItem>
-                  <Divider />
-                  <MenuItem onClick={handleLogout} sx={{ color: 'error.main' }}>
-                    <ListItemIcon>
-                      <LogoutIcon fontSize="small" color="error" />
-                    </ListItemIcon>
-                    Logout
-                  </MenuItem>
-                </Menu>
-              </Box>
-            ) : (
+    <AppBar 
+      position="sticky" 
+      sx={{ bgcolor: theme.palette.primary.main }}
+      elevation={0}
+    >
+      <Container maxWidth="lg">
+        <Toolbar sx={{ px: { xs: 1, sm: 2 } }}>
+          {isMobile && (
+            <IconButton
+              color="inherit"
+              aria-label="open drawer"
+              edge="start"
+              onClick={handleDrawerToggle}
+              sx={{ mr: 2 }}
+            >
+              <MenuIcon />
+            </IconButton>
+          )}
+          
+          <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
+            <Link to="/" style={{ color: 'inherit', textDecoration: 'none' }}>
+              <RITLogo />
+            </Link>
+          </Box>
+          
+          {!isMobile && (
+            <Box sx={{ display: 'flex' }}>
               <Button 
-                color={isHomePage && !scrolled ? 'inherit' : 'primary'} 
-                variant={isHomePage && !scrolled ? 'outlined' : 'contained'}
+                color="inherit" 
                 component={Link} 
-                to="/login"
+                to="/"
                 sx={{ 
-                  ml: 2,
-                  px: 3,
-                  borderColor: isHomePage && !scrolled ? 'white' : undefined,
+                  mx: 1,
+                  position: 'relative',
+                  '&::after': isLinkActive('/') ? {
+                    content: '""',
+                    position: 'absolute',
+                    bottom: 0,
+                    left: '20%',
+                    width: '60%',
+                    height: '3px',
+                    bgcolor: 'white',
+                    borderRadius: '2px'
+                  } : {}
                 }}
               >
-                Login
+                Home
               </Button>
-            )}
-          </Toolbar>
-        </Container>
-        
-        {/* Mobile Drawer */}
-        <Drawer
-          anchor="left"
-          open={drawerOpen}
-          onClose={handleDrawerToggle}
-          PaperProps={{
-            sx: {
-              borderRadius: '0 12px 12px 0'
-            }
-          }}
-        >
-          {drawerContent}
-        </Drawer>
-      </AppBar>
-    </HideOnScroll>
+              <Button 
+                color="inherit" 
+                component={Link} 
+                to="/rooms"
+                sx={{ 
+                  mx: 1,
+                  position: 'relative',
+                  '&::after': isLinkActive('/rooms') ? {
+                    content: '""',
+                    position: 'absolute',
+                    bottom: 0,
+                    left: '20%',
+                    width: '60%',
+                    height: '3px',
+                    bgcolor: 'white',
+                    borderRadius: '2px'
+                  } : {}
+                }}
+              >
+                Rooms
+              </Button>
+              {currentUser && (
+                <Button 
+                  color="inherit" 
+                  component={Link} 
+                  to="/my-reservations"
+                  sx={{ 
+                    mx: 1,
+                    position: 'relative',
+                    '&::after': isLinkActive('/my-reservations') ? {
+                      content: '""',
+                      position: 'absolute',
+                      bottom: 0,
+                      left: '20%',
+                      width: '60%',
+                      height: '3px',
+                      bgcolor: 'white',
+                      borderRadius: '2px'
+                    } : {}
+                  }}
+                >
+                  My Reservations
+                </Button>
+              )}
+            </Box>
+          )}
+          
+          {currentUser ? (
+            <Box>
+              <IconButton
+                aria-label="account of current user"
+                aria-controls="menu-appbar"
+                aria-haspopup="true"
+                onClick={handleMenu}
+                color="inherit"
+                sx={{ ml: 2 }}
+              >
+                <Avatar sx={{ 
+                  width: 36, 
+                  height: 36, 
+                  bgcolor: 'white',
+                  color: theme.palette.primary.main,
+                  fontWeight: 600,
+                }}>
+                  {currentUser.email.charAt(0).toUpperCase()}
+                </Avatar>
+              </IconButton>
+              <Menu
+                id="menu-appbar"
+                anchorEl={anchorEl}
+                keepMounted
+                open={Boolean(anchorEl)}
+                onClose={handleClose}
+                PaperProps={{
+                  elevation: 2,
+                  sx: {
+                    minWidth: 200,
+                    mt: 1.5,
+                  }
+                }}
+                transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+                anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+              >
+                <MenuItem disabled>
+                  <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
+                    {currentUser.email}
+                  </Typography>
+                </MenuItem>
+                <Divider />
+                <MenuItem onClick={handleLogout} sx={{ color: 'error.main' }}>
+                  <ListItemIcon>
+                    <LogoutIcon fontSize="small" color="error" />
+                  </ListItemIcon>
+                  Logout
+                </MenuItem>
+              </Menu>
+            </Box>
+          ) : (
+            <Button 
+              color="inherit" 
+              variant="outlined"
+              component={Link} 
+              to="/login"
+              sx={{ 
+                ml: 2,
+                px: 3,
+                borderColor: 'white',
+              }}
+            >
+              Login
+            </Button>
+          )}
+        </Toolbar>
+      </Container>
+      
+      {/* Mobile Drawer */}
+      <Drawer
+        anchor="left"
+        open={drawerOpen}
+        onClose={handleDrawerToggle}
+      >
+        {drawerContent}
+      </Drawer>
+    </AppBar>
   );
 }
 
