@@ -1,3 +1,4 @@
+// src/pages/Rooms.js
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
@@ -13,10 +14,19 @@ import {
   CircularProgress,
   Alert,
   Divider,
-  Paper
+  Paper,
+  ToggleButtonGroup,
+  ToggleButton,
+  useTheme
 } from '@mui/material';
 import RoomSearch from '../components/rooms/RoomSearch';
-import { getRooms, searchAvailableRooms, getPopularRooms } from '../services/roomService';
+import RoomScheduleView from '../components/rooms/RoomScheduleView';
+import RoomCard from '../components/rooms/RoomCard';
+import { getRooms, searchAvailableRooms, getPopularRooms, getRoomReservations } from '../services/roomService';
+// Icons
+import ViewListIcon from '@mui/icons-material/ViewList';
+import CalendarViewDayIcon from '@mui/icons-material/CalendarViewDay';
+import MapIcon from '@mui/icons-material/Map';
 
 function Rooms() {
   const [rooms, setRooms] = useState([]);
@@ -25,6 +35,10 @@ function Rooms() {
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState(null);
   const [searchParams, setSearchParams] = useState(null);
+  const [viewMode, setViewMode] = useState('list'); // 'list', 'schedule', or 'map'
+  const [reservations, setReservations] = useState({});
+  const [scheduleDate, setScheduleDate] = useState(new Date());
+  const theme = useTheme();
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -38,6 +52,9 @@ function Rooms() {
         const popularRoomsData = await getPopularRooms(3);
         setPopularRooms(popularRoomsData);
         
+        // Load reservations for all rooms for schedule view
+        await fetchReservationsForRooms(roomsData);
+        
         setLoading(false);
       } catch (err) {
         console.error("Error fetching rooms:", err);
@@ -49,11 +66,30 @@ function Rooms() {
     fetchInitialData();
   }, []);
 
+  // Fetch reservations for all rooms
+  const fetchReservationsForRooms = async (roomsData) => {
+    try {
+      const reservationsMap = {};
+      for (const room of roomsData) {
+        const roomReservations = await getRoomReservations(room.id);
+        reservationsMap[room.id] = roomReservations;
+      }
+      setReservations(reservationsMap);
+    } catch (err) {
+      console.error("Error fetching reservations:", err);
+    }
+  };
+
   const handleSearch = async (searchParams) => {
     try {
       setSearching(true);
       setSearchParams(searchParams);
       setError(null);
+      
+      // If date is provided in search params, update schedule date
+      if (searchParams.startTime) {
+        setScheduleDate(new Date(searchParams.startTime));
+      }
       
       // Search for available rooms
       const availableRooms = await searchAvailableRooms(
@@ -63,6 +99,10 @@ function Rooms() {
       );
       
       setRooms(availableRooms);
+      
+      // Update reservations for schedule view
+      await fetchReservationsForRooms(availableRooms);
+      
       setSearching(false);
     } catch (err) {
       console.error("Error searching rooms:", err);
@@ -80,12 +120,25 @@ function Rooms() {
       const roomsData = await getRooms();
       setRooms(roomsData);
       
+      // Update reservations for schedule view
+      await fetchReservationsForRooms(roomsData);
+      
       setSearching(false);
     } catch (err) {
       console.error("Error clearing search:", err);
       setError("Failed to reset room list. Please try again.");
       setSearching(false);
     }
+  };
+
+  const handleViewChange = (event, newView) => {
+    if (newView !== null) {
+      setViewMode(newView);
+    }
+  };
+
+  const handleScheduleDateChange = (newDate) => {
+    setScheduleDate(newDate);
   };
 
   if (loading) return (
@@ -106,10 +159,10 @@ function Rooms() {
         {/* Search Component */}
         <RoomSearch onSearch={handleSearch} />
         
-        {/* Search Results */}
-        {searchParams && (
-          <Box sx={{ mb: 3 }}>
-            <Paper sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        {/* Search Results Controls */}
+        <Box sx={{ mb: 3, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between' }}>
+          {searchParams ? (
+            <Paper sx={{ p: 2, display: 'flex', flexGrow: 1, justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="body1">
                 Showing {rooms.length} available room{rooms.length !== 1 ? 's' : ''} for{' '}
                 {new Date(searchParams.startTime).toLocaleString()} to{' '}
@@ -119,8 +172,28 @@ function Rooms() {
                 Clear Search
               </Button>
             </Paper>
-          </Box>
-        )}
+          ) : (
+            <Box></Box>
+          )}
+          
+          <ToggleButtonGroup
+            value={viewMode}
+            exclusive
+            onChange={handleViewChange}
+            aria-label="view mode"
+            sx={{ justifySelf: 'flex-end' }}
+          >
+            <ToggleButton value="list" aria-label="list view">
+              <ViewListIcon />
+            </ToggleButton>
+            <ToggleButton value="schedule" aria-label="schedule view">
+              <CalendarViewDayIcon />
+            </ToggleButton>
+            <ToggleButton value="map" aria-label="map view">
+              <MapIcon />
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
         
         {error && (
           <Alert severity="error" sx={{ mb: 3 }}>
@@ -134,8 +207,8 @@ function Rooms() {
           </Box>
         ) : (
           <>
-            {/* Popular Rooms (show only when not searching) */}
-            {!searchParams && popularRooms.length > 0 && (
+            {/* Popular Rooms (show only when not searching and in list view) */}
+            {!searchParams && viewMode === 'list' && popularRooms.length > 0 && (
               <>
                 <Typography variant="h5" sx={{ mt: 4, mb: 2 }}>
                   Popular Rooms
@@ -143,55 +216,7 @@ function Rooms() {
                 <Grid container spacing={3} sx={{ mb: 4 }}>
                   {popularRooms.map((room) => (
                     <Grid item xs={12} md={4} key={room.id}>
-                      <Card sx={{ borderTop: '3px solid #1976d2' }}>
-                        <CardContent>
-                          <Typography variant="h5" component="h2">
-                            {room.name}
-                          </Typography>
-                          <Typography color="text.secondary">
-                            {room.location}
-                          </Typography>
-                          <Typography variant="body2" sx={{ mt: 1 }}>
-                            Booked {room.bookingCount} times
-                          </Typography>
-                          <Box sx={{ mt: 1 }}>
-                            {(room.equipment || []).slice(0, 3).map((item, index) => (
-                              <Chip 
-                                key={index} 
-                                label={item} 
-                                variant="outlined" 
-                                size="small" 
-                                sx={{ mr: 0.5, mb: 0.5 }} 
-                              />
-                            ))}
-                            {(room.equipment?.length || 0) > 3 && (
-                              <Chip 
-                                label={`+${(room.equipment?.length || 0) - 3} more`} 
-                                size="small" 
-                                sx={{ mb: 0.5 }} 
-                              />
-                            )}
-                          </Box>
-                        </CardContent>
-                        <CardActions>
-                          <Button 
-                            size="small" 
-                            component={Link} 
-                            to={`/rooms/${room.id}`}
-                          >
-                            View Details
-                          </Button>
-                          <Button 
-                            size="small" 
-                            variant="contained" 
-                            color="primary"
-                            component={Link} 
-                            to={`/rooms/${room.id}/book`}
-                          >
-                            Book Now
-                          </Button>
-                        </CardActions>
-                      </Card>
+                      <RoomCard room={room} isPopular={true} />
                     </Grid>
                   ))}
                 </Grid>
@@ -199,85 +224,100 @@ function Rooms() {
               </>
             )}
             
-            {/* All Rooms or Search Results */}
-            <Typography variant="h5" sx={{ mb: 2 }}>
-              {searchParams ? 'Available Rooms' : 'All Rooms'}
-            </Typography>
-            
-            {rooms.length === 0 ? (
-              <Paper sx={{ p: 3, textAlign: 'center' }}>
-                <Typography variant="h6">
-                  {searchParams 
-                    ? 'No rooms available for the selected criteria' 
-                    : 'No rooms found in the system'}
+            {/* View Mode Content */}
+            {viewMode === 'list' && (
+              <>
+                <Typography variant="h5" sx={{ mb: 2 }}>
+                  {searchParams ? 'Available Rooms' : 'All Rooms'}
                 </Typography>
-                {searchParams && (
+                
+                {rooms.length === 0 ? (
+                  <Paper sx={{ p: 3, textAlign: 'center' }}>
+                    <Typography variant="h6">
+                      {searchParams 
+                        ? 'No rooms available for the selected criteria' 
+                        : 'No rooms found in the system'}
+                    </Typography>
+                    {searchParams && (
+                      <Button 
+                        variant="outlined" 
+                        color="primary"
+                        sx={{ mt: 2 }}
+                        onClick={clearSearch}
+                      >
+                        Clear Search Filters
+                      </Button>
+                    )}
+                  </Paper>
+                ) : (
+                  <Grid container spacing={3}>
+                    {rooms.map((room) => (
+                      <Grid item xs={12} md={4} key={room.id}>
+                        <RoomCard room={room} />
+                      </Grid>
+                    ))}
+                  </Grid>
+                )}
+              </>
+            )}
+            
+            {viewMode === 'schedule' && (
+              <>
+                <Typography variant="h5" sx={{ mb: 2 }}>
+                  Room Schedule
+                </Typography>
+                
+                {rooms.length === 0 ? (
+                  <Paper sx={{ p: 3, textAlign: 'center' }}>
+                    <Typography variant="h6">
+                      {searchParams 
+                        ? 'No rooms available for the selected criteria' 
+                        : 'No rooms found in the system'}
+                    </Typography>
+                    {searchParams && (
+                      <Button 
+                        variant="outlined" 
+                        color="primary"
+                        sx={{ mt: 2 }}
+                        onClick={clearSearch}
+                      >
+                        Clear Search Filters
+                      </Button>
+                    )}
+                  </Paper>
+                ) : (
+                  <RoomScheduleView 
+                    rooms={rooms} 
+                    reservations={reservations}
+                    date={scheduleDate}
+                    onDateChange={handleScheduleDateChange}
+                  />
+                )}
+              </>
+            )}
+            
+            {viewMode === 'map' && (
+              <>
+                <Typography variant="h5" sx={{ mb: 2 }}>
+                  Room Map
+                </Typography>
+                
+                <Paper sx={{ p: 3, textAlign: 'center' }}>
+                  <Typography variant="h6">
+                    3D Map visualization is under development
+                  </Typography>
+                  <Typography paragraph sx={{ my: 2 }}>
+                    Check back soon for an interactive 3D map of our campus rooms
+                  </Typography>
                   <Button 
                     variant="outlined" 
                     color="primary"
-                    sx={{ mt: 2 }}
-                    onClick={clearSearch}
+                    onClick={() => setViewMode('schedule')}
                   >
-                    Clear Search Filters
+                    View Schedule Instead
                   </Button>
-                )}
-              </Paper>
-            ) : (
-              <Grid container spacing={3}>
-                {rooms.map((room) => (
-                  <Grid item xs={12} md={4} key={room.id}>
-                    <Card>
-                      <CardContent>
-                        <Typography variant="h5" component="h2">
-                          {room.name}
-                        </Typography>
-                        <Typography color="text.secondary">
-                          {room.location}
-                        </Typography>
-                        <Typography variant="body2" sx={{ mt: 1 }}>
-                          Capacity: {room.capacity} people
-                        </Typography>
-                        <Box sx={{ mt: 1 }}>
-                          {(room.equipment || []).map((item, index) => (
-                            <Chip 
-                              key={index} 
-                              label={item} 
-                              variant="outlined" 
-                              size="small" 
-                              sx={{ mr: 0.5, mb: 0.5 }} 
-                            />
-                          ))}
-                          {(room.equipment?.length || 0) > 3 && (
-                            <Chip 
-                              label={`+${(room.equipment?.length || 0) - 3} more`} 
-                              size="small" 
-                              sx={{ mb: 0.5 }} 
-                            />
-                          )}
-                        </Box>
-                      </CardContent>
-                      <CardActions>
-                        <Button 
-                          size="small" 
-                          component={Link} 
-                          to={`/rooms/${room.id}`}
-                        >
-                          View Details
-                        </Button>
-                        <Button 
-                          size="small" 
-                          variant="contained" 
-                          color="primary"
-                          component={Link} 
-                          to={`/rooms/${room.id}/book`}
-                        >
-                          Book Now
-                        </Button>
-                      </CardActions>
-                    </Card>
-                  </Grid>
-                ))}
-              </Grid>
+                </Paper>
+              </>
             )}
           </>
         )}

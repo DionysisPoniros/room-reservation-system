@@ -14,6 +14,7 @@ import RoomDetails from './pages/RoomDetails';
 import BookingForm from './components/booking/BookingForm';
 import MyReservations from './pages/MyReservations';
 import Login from './components/auth/Login';
+import AdminPage from './pages/AdminPage'; // Import the Admin page
 import PrivateRoute from './components/auth/PrivateRoute';
 import { AuthProvider } from './contexts/AuthContext';
 
@@ -38,6 +39,11 @@ function App() {
               <Route path="/my-reservations" element={
                 <PrivateRoute>
                   <MyReservations />
+                </PrivateRoute>
+              } />
+              <Route path="/admin" element={
+                <PrivateRoute>
+                  <AdminPage />
                 </PrivateRoute>
               } />
               <Route path="/login" element={<Login />} />

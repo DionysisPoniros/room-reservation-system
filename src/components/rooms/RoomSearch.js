@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// src/components/rooms/RoomSearch.js
+import React, { useState, useEffect } from 'react';
 import { 
   Box, 
   Paper, 
@@ -15,11 +16,24 @@ import {
   FormGroup,
   FormControlLabel,
   Checkbox,
-  Slider
+  Slider,
+  IconButton,
+  Collapse,
+  useTheme,
+  CircularProgress
 } from '@mui/material';
-import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
+import { DateTimePicker, DatePicker } from '@mui/x-date-pickers';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { set, addHours } from 'date-fns';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { db } from '../../firebase/config';
+
+// Icons
+import FilterListIcon from '@mui/icons-material/FilterList';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import SearchIcon from '@mui/icons-material/Search';
 
 // Equipment options
 const equipmentOptions = [
@@ -33,41 +47,80 @@ const equipmentOptions = [
   "Document Camera"
 ];
 
-// Room types
-const roomTypes = [
-  "Lecture Hall",
-  "Classroom",
-  "Lab",
-  "Meeting Room",
-  "Study Room",
-  "Conference Room",
-  "Office",
-  "Auditorium"
-];
-
-// Buildings
-const buildings = [
-  "Liberal Arts",
-  "Science Building",
-  "Engineering Hall",
-  "Business Center",
-  "Student Center",
-  "Library"
-];
+// These will be defined inside the component
 
 function RoomSearch({ onSearch }) {
+  const theme = useTheme();
   const [startTime, setStartTime] = useState(new Date());
-  const [endTime, setEndTime] = useState(new Date(new Date().setHours(new Date().getHours() + 1)));
+  const [endTime, setEndTime] = useState(addHours(new Date(), 1));
   const [capacity, setCapacity] = useState(1);
   const [selectedEquipment, setSelectedEquipment] = useState([]);
   const [roomType, setRoomType] = useState('');
   const [building, setBuilding] = useState('');
   const [advanced, setAdvanced] = useState(false);
+  const [searchMode, setSearchMode] = useState('specific'); // 'specific' or 'day'
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [roomTypes, setRoomTypes] = useState([]);
+  const [buildings, setBuildings] = useState([]);
+  const [loadingFilters, setLoadingFilters] = useState(false);
+  
+  // Fetch room types and buildings from database
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        setLoadingFilters(true);
+        
+        // Fetch all rooms
+        const roomsCollection = collection(db, 'rooms');
+        const roomsSnapshot = await getDocs(query(roomsCollection, orderBy('name')));
+        
+        // Extract unique room types and buildings
+        const types = new Set();
+        const buildingNames = new Set();
+        
+        roomsSnapshot.forEach(doc => {
+          const roomData = doc.data();
+          if (roomData.type) types.add(roomData.type);
+          
+          // Extract building from location or a dedicated field if available
+          if (roomData.building) {
+            buildingNames.add(roomData.building);
+          } else if (roomData.location) {
+            // Try to extract building from location (this is just an example approach)
+            const locationParts = roomData.location.split(',');
+            if (locationParts.length > 0) {
+              buildingNames.add(locationParts[0].trim());
+            }
+          }
+        });
+        
+        setRoomTypes(Array.from(types).sort());
+        setBuildings(Array.from(buildingNames).sort());
+        setLoadingFilters(false);
+      } catch (error) {
+        console.error("Error fetching filter options:", error);
+        setLoadingFilters(false);
+      }
+    };
+    
+    fetchFilterOptions();
+  }, []);
 
   const handleSearch = () => {
+    // In day search mode, set start and end times to cover the whole day
+    let searchStartTime = startTime;
+    let searchEndTime = endTime;
+    
+    if (searchMode === 'day') {
+      // Set start time to 7:00 AM of selected date
+      searchStartTime = set(selectedDate, { hours: 7, minutes: 0, seconds: 0, milliseconds: 0 });
+      // Set end time to 11:00 PM of selected date
+      searchEndTime = set(selectedDate, { hours: 23, minutes: 0, seconds: 0, milliseconds: 0 });
+    }
+    
     onSearch({
-      startTime,
-      endTime,
+      startTime: searchStartTime,
+      endTime: searchEndTime,
       filters: {
         capacity,
         equipment: selectedEquipment,
@@ -77,38 +130,107 @@ function RoomSearch({ onSearch }) {
     });
   };
 
+  // Update end time when start time changes
+  const handleStartTimeChange = (newStartTime) => {
+    setStartTime(newStartTime);
+    // Ensure end time is at least 1 hour after start time
+    if (endTime <= newStartTime) {
+      setEndTime(addHours(newStartTime, 1));
+    }
+  };
+
   return (
     <Paper sx={{ p: 3, mb: 3 }}>
-      <Typography variant="h6" gutterBottom>
-        Find Available Rooms
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>
+          Find Available Rooms
+        </Typography>
+        
+        <FormControl component="fieldset">
+          <FormGroup row>
+            <FormControlLabel
+              control={
+                <Checkbox 
+                  checked={advanced} 
+                  onChange={(e) => setAdvanced(e.target.checked)} 
+                  icon={<FilterListIcon />}
+                  checkedIcon={<FilterListIcon />}
+                />
+              }
+              label={advanced ? "Hide Filters" : "Show Filters"}
+            />
+          </FormGroup>
+        </FormControl>
+      </Box>
       
       <Box component="form" noValidate>
         <Grid container spacing={3}>
-          {/* Date and Time Selection */}
-          <Grid item xs={12} md={6}>
-            <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <DateTimePicker
-                label="Start Time"
-                value={startTime}
-                onChange={setStartTime}
-                renderInput={(params) => <TextField {...params} fullWidth />}
-                minDateTime={new Date()}
-              />
-            </LocalizationProvider>
+          {/* Search Type Selection */}
+          <Grid item xs={12}>
+            <FormControl component="fieldset">
+              <FormGroup row>
+                <FormControlLabel
+                  control={
+                    <Checkbox 
+                      checked={searchMode === 'specific'} 
+                      onChange={() => setSearchMode('specific')} 
+                    />
+                  }
+                  label="Search for Specific Time Range"
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox 
+                      checked={searchMode === 'day'} 
+                      onChange={() => setSearchMode('day')} 
+                    />
+                  }
+                  label="Search Availability for Full Day"
+                />
+              </FormGroup>
+            </FormControl>
           </Grid>
           
-          <Grid item xs={12} md={6}>
-            <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <DateTimePicker
-                label="End Time"
-                value={endTime}
-                onChange={setEndTime}
-                renderInput={(params) => <TextField {...params} fullWidth />}
-                minDateTime={startTime}
-              />
-            </LocalizationProvider>
-          </Grid>
+          {/* Date and Time Selection */}
+          {searchMode === 'specific' ? (
+            <>
+              <Grid item xs={12} md={6}>
+                <LocalizationProvider dateAdapter={AdapterDateFns}>
+                  <DateTimePicker
+                    label="Start Time"
+                    value={startTime}
+                    onChange={handleStartTimeChange}
+                    renderInput={(params) => <TextField {...params} fullWidth />}
+                    minDateTime={new Date()}
+                  />
+                </LocalizationProvider>
+              </Grid>
+              
+              <Grid item xs={12} md={6}>
+                <LocalizationProvider dateAdapter={AdapterDateFns}>
+                  <DateTimePicker
+                    label="End Time"
+                    value={endTime}
+                    onChange={setEndTime}
+                    renderInput={(params) => <TextField {...params} fullWidth />}
+                    minDateTime={startTime}
+                  />
+                </LocalizationProvider>
+              </Grid>
+            </>
+          ) : (
+            <Grid item xs={12} md={6}>
+              <LocalizationProvider dateAdapter={AdapterDateFns}>
+                <DatePicker
+                  label="Select Date"
+                  value={selectedDate}
+                  onChange={setSelectedDate}
+                  renderInput={(params) => <TextField {...params} fullWidth />}
+                  minDate={new Date()}
+                />
+              </LocalizationProvider>
+            </Grid>
+          )}
           
           {/* Capacity Slider */}
           <Grid item xs={12}>
@@ -121,31 +243,21 @@ function RoomSearch({ onSearch }) {
               aria-labelledby="capacity-slider"
               valueLabelDisplay="auto"
               min={1}
-              max={100}
+              max={10}
               marks={[
                 { value: 1, label: '1' },
-                { value: 10, label: '10' },
-                { value: 50, label: '50' },
-                { value: 100, label: '100+' }
+                { value: 2, label: '2' },
+                { value: 4, label: '4' },
+                { value: 6, label: '6' },
+                { value: 8, label: '8' },
+                { value: 10, label: '10+' }
               ]}
             />
           </Grid>
           
-          {/* Advanced Options Toggle */}
-          <Grid item xs={12}>
-            <FormControlLabel
-              control={
-                <Checkbox 
-                  checked={advanced} 
-                  onChange={(e) => setAdvanced(e.target.checked)} 
-                />
-              }
-              label="Show Advanced Options"
-            />
-          </Grid>
-          
-          {advanced && (
-            <>
+          {/* Advanced Options */}
+          <Collapse in={advanced} sx={{ width: '100%' }}>
+            <Grid container spacing={3} sx={{ mt: 0 }}>
               {/* Room Type */}
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth>
@@ -155,11 +267,21 @@ function RoomSearch({ onSearch }) {
                     value={roomType}
                     label="Room Type"
                     onChange={(e) => setRoomType(e.target.value)}
+                    disabled={loadingFilters}
                   >
                     <MenuItem value="">Any</MenuItem>
-                    {roomTypes.map((type) => (
-                      <MenuItem key={type} value={type}>{type}</MenuItem>
-                    ))}
+                    {loadingFilters ? (
+                      <MenuItem disabled>
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          <CircularProgress size={20} sx={{ mr: 1 }} />
+                          Loading room types...
+                        </Box>
+                      </MenuItem>
+                    ) : (
+                      roomTypes.map((type) => (
+                        <MenuItem key={type} value={type}>{type}</MenuItem>
+                      ))
+                    )}
                   </Select>
                 </FormControl>
               </Grid>
@@ -173,11 +295,21 @@ function RoomSearch({ onSearch }) {
                     value={building}
                     label="Building"
                     onChange={(e) => setBuilding(e.target.value)}
+                    disabled={loadingFilters}
                   >
                     <MenuItem value="">Any</MenuItem>
-                    {buildings.map((building) => (
-                      <MenuItem key={building} value={building}>{building}</MenuItem>
-                    ))}
+                    {loadingFilters ? (
+                      <MenuItem disabled>
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          <CircularProgress size={20} sx={{ mr: 1 }} />
+                          Loading buildings...
+                        </Box>
+                      </MenuItem>
+                    ) : (
+                      buildings.map((buildingName) => (
+                        <MenuItem key={buildingName} value={buildingName}>{buildingName}</MenuItem>
+                      ))
+                    )}
                   </Select>
                 </FormControl>
               </Grid>
@@ -211,8 +343,8 @@ function RoomSearch({ onSearch }) {
                   )}
                 />
               </Grid>
-            </>
-          )}
+            </Grid>
+          </Collapse>
           
           {/* Search Button */}
           <Grid item xs={12}>
@@ -221,6 +353,9 @@ function RoomSearch({ onSearch }) {
               color="primary" 
               fullWidth
               onClick={handleSearch}
+              startIcon={<SearchIcon />}
+              size="large"
+              sx={{ py: 1.5 }}
             >
               Search Available Rooms
             </Button>
