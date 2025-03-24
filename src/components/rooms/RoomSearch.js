@@ -47,8 +47,6 @@ const equipmentOptions = [
   "Document Camera"
 ];
 
-// These will be defined inside the component
-
 function RoomSearch({ onSearch }) {
   const theme = useTheme();
   const [startTime, setStartTime] = useState(new Date());
@@ -97,6 +95,9 @@ function RoomSearch({ onSearch }) {
         setRoomTypes(Array.from(types).sort());
         setBuildings(Array.from(buildingNames).sort());
         setLoadingFilters(false);
+        
+        console.log("Room types loaded:", Array.from(types));
+        console.log("Buildings loaded:", Array.from(buildingNames));
       } catch (error) {
         console.error("Error fetching filter options:", error);
         setLoadingFilters(false);
@@ -118,6 +119,17 @@ function RoomSearch({ onSearch }) {
       searchEndTime = set(selectedDate, { hours: 23, minutes: 0, seconds: 0, milliseconds: 0 });
     }
     
+    console.log("Search parameters:", {
+      startTime: searchStartTime,
+      endTime: searchEndTime,
+      filters: {
+        capacity,
+        equipment: selectedEquipment,
+        type: roomType,
+        building
+      }
+    });
+    
     onSearch({
       startTime: searchStartTime,
       endTime: searchEndTime,
@@ -136,6 +148,12 @@ function RoomSearch({ onSearch }) {
     // Ensure end time is at least 1 hour after start time
     if (endTime <= newStartTime) {
       setEndTime(addHours(newStartTime, 1));
+    }
+  };
+
+  const handleSearchTypeChange = (newMode) => {
+    if (searchMode !== newMode) {
+      setSearchMode(newMode);
     }
   };
 
@@ -173,7 +191,7 @@ function RoomSearch({ onSearch }) {
                   control={
                     <Checkbox 
                       checked={searchMode === 'specific'} 
-                      onChange={() => setSearchMode('specific')} 
+                      onChange={() => handleSearchTypeChange('specific')} 
                     />
                   }
                   label="Search for Specific Time Range"
@@ -182,7 +200,7 @@ function RoomSearch({ onSearch }) {
                   control={
                     <Checkbox 
                       checked={searchMode === 'day'} 
-                      onChange={() => setSearchMode('day')} 
+                      onChange={() => handleSearchTypeChange('day')} 
                     />
                   }
                   label="Search Availability for Full Day"
@@ -266,7 +284,10 @@ function RoomSearch({ onSearch }) {
                     labelId="room-type-label"
                     value={roomType}
                     label="Room Type"
-                    onChange={(e) => setRoomType(e.target.value)}
+                    onChange={(e) => {
+                      console.log("Room type selected:", e.target.value);
+                      setRoomType(e.target.value);
+                    }}
                     disabled={loadingFilters}
                   >
                     <MenuItem value="">Any</MenuItem>
@@ -294,7 +315,10 @@ function RoomSearch({ onSearch }) {
                     labelId="building-label"
                     value={building}
                     label="Building"
-                    onChange={(e) => setBuilding(e.target.value)}
+                    onChange={(e) => {
+                      console.log("Building selected:", e.target.value);
+                      setBuilding(e.target.value);
+                    }}
                     disabled={loadingFilters}
                   >
                     <MenuItem value="">Any</MenuItem>
@@ -322,6 +346,7 @@ function RoomSearch({ onSearch }) {
                   options={equipmentOptions}
                   value={selectedEquipment}
                   onChange={(event, newValue) => {
+                    console.log("Equipment selected:", newValue);
                     setSelectedEquipment(newValue);
                   }}
                   renderTags={(value, getTagProps) =>

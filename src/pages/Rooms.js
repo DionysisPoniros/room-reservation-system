@@ -1,5 +1,5 @@
-// src/pages/Rooms.js
-import React, { useState, useEffect } from 'react';
+// src/pages/Rooms.js - Performance Optimized
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Container, 
@@ -17,70 +17,179 @@ import {
   Paper,
   ToggleButtonGroup,
   ToggleButton,
-  useTheme
+  useTheme,
+  Skeleton,
+  LinearProgress
 } from '@mui/material';
 import RoomSearch from '../components/rooms/RoomSearch';
 import RoomScheduleView from '../components/rooms/RoomScheduleView';
 import RoomCard from '../components/rooms/RoomCard';
-import { getRooms, searchAvailableRooms, getPopularRooms, getRoomReservations } from '../services/roomService';
+import { getRooms, searchAvailableRooms, getPopularRooms, getRoomReservations, getReservationsForDate } from '../services/roomService';
 // Icons
 import ViewListIcon from '@mui/icons-material/ViewList';
 import CalendarViewDayIcon from '@mui/icons-material/CalendarViewDay';
 import MapIcon from '@mui/icons-material/Map';
 
+// Number of rooms to display initially in the schedule view
+const INITIAL_ROOM_LIMIT = 10;
+
 function Rooms() {
   const [rooms, setRooms] = useState([]);
+  const [displayedRooms, setDisplayedRooms] = useState([]);
   const [popularRooms, setPopularRooms] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [roomsLoading, setRoomsLoading] = useState(true);
+  const [reservationsLoading, setReservationsLoading] = useState(true);
   const [searching, setSearching] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [searchParams, setSearchParams] = useState(null);
-  const [viewMode, setViewMode] = useState('list'); // 'list', 'schedule', or 'map'
+  const [viewMode, setViewMode] = useState('schedule'); 
   const [reservations, setReservations] = useState({});
   const [scheduleDate, setScheduleDate] = useState(new Date());
+  const [lastRefresh, setLastRefresh] = useState(Date.now());
+  const [cachedData, setCachedData] = useState({
+    rooms: null,
+    lastFetched: null
+  });
   const theme = useTheme();
 
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        setLoading(true);
-        // Load all rooms initially
-        const roomsData = await getRooms();
-        setRooms(roomsData);
-        
-        // Load popular rooms
-        const popularRoomsData = await getPopularRooms(3);
-        setPopularRooms(popularRoomsData);
-        
-        // Load reservations for all rooms for schedule view
-        await fetchReservationsForRooms(roomsData);
-        
-        setLoading(false);
-      } catch (err) {
-        console.error("Error fetching rooms:", err);
-        setError("Failed to load rooms. Please try again.");
-        setLoading(false);
-      }
-    };
+  // Cache key for localStorage
+  const CACHE_KEY = 'roomFinderCache';
+  const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
 
-    fetchInitialData();
+  // Load data from localStorage cache on component mount
+  useEffect(() => {
+    const cachedDataStr = localStorage.getItem(CACHE_KEY);
+    if (cachedDataStr) {
+      try {
+        const cached = JSON.parse(cachedDataStr);
+        const now = Date.now();
+        // Check if cache is still valid (less than 5 minutes old)
+        if (cached.lastFetched && now - cached.lastFetched < CACHE_EXPIRY) {
+          console.log('Using cached room data');
+          setCachedData(cached);
+          if (cached.rooms) {
+            setRooms(cached.rooms);
+            // Only display first N rooms initially for better performance
+            setDisplayedRooms(cached.rooms.slice(0, INITIAL_ROOM_LIMIT));
+            setRoomsLoading(false);
+          }
+        }
+      } catch (err) {
+        console.error('Error parsing cached data:', err);
+        // Invalid cache, we'll fetch fresh data
+      }
+    }
   }, []);
 
-  // Fetch reservations for all rooms
-  const fetchReservationsForRooms = async (roomsData) => {
+  // Fetch room data, with optimized loading
+  const fetchRooms = useCallback(async () => {
     try {
-      const reservationsMap = {};
-      for (const room of roomsData) {
-        const roomReservations = await getRoomReservations(room.id);
-        reservationsMap[room.id] = roomReservations;
-      }
-      setReservations(reservationsMap);
+      setRoomsLoading(true);
+      // Fetch all rooms
+      const roomsData = await getRooms();
+      setRooms(roomsData);
+      
+      // Only display first N rooms initially for better performance
+      setDisplayedRooms(roomsData.slice(0, INITIAL_ROOM_LIMIT));
+      
+      // Update cache
+      const cacheData = {
+        rooms: roomsData,
+        lastFetched: Date.now()
+      };
+      localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+      setCachedData(cacheData);
+      
+      setRoomsLoading(false);
+      return roomsData;
+    } catch (err) {
+      console.error("Error fetching rooms:", err);
+      setError("Failed to load rooms. Please try again.");
+      setRoomsLoading(false);
+      return [];
+    }
+  }, []);
+
+  // Load more rooms (for pagination)
+  const loadMoreRooms = useCallback(() => {
+    setLoadingMore(true);
+    // Add another batch of rooms to the displayed list
+    const currentLength = displayedRooms.length;
+    const newRooms = rooms.slice(currentLength, currentLength + INITIAL_ROOM_LIMIT);
+    setDisplayedRooms(prev => [...prev, ...newRooms]);
+    setLoadingMore(false);
+  }, [rooms, displayedRooms]);
+
+  // Fetch reservations for the current date only (more efficient)
+  const fetchReservationsForCurrentDate = useCallback(async (roomsToCheck) => {
+    try {
+      setReservationsLoading(true);
+      
+      // Get start and end of current date
+      const dateStart = new Date(scheduleDate);
+      dateStart.setHours(0, 0, 0, 0);
+      
+      const dateEnd = new Date(scheduleDate);
+      dateEnd.setHours(23, 59, 59, 999);
+      
+      // Get all reservations for this date range (single query)
+      const allReservations = await getReservationsForDate(dateStart, dateEnd);
+      
+      // Group by roomId
+      const reservationsByRoom = {};
+      allReservations.forEach(res => {
+        if (!reservationsByRoom[res.roomId]) {
+          reservationsByRoom[res.roomId] = [];
+        }
+        reservationsByRoom[res.roomId].push(res);
+      });
+      
+      setReservations(reservationsByRoom);
+      setReservationsLoading(false);
     } catch (err) {
       console.error("Error fetching reservations:", err);
+      setReservationsLoading(false);
     }
-  };
+  }, [scheduleDate]);
 
-  const handleSearch = async (searchParams) => {
+  // Fetch popular rooms
+  const fetchPopularRooms = useCallback(async () => {
+    try {
+      const popularRoomsData = await getPopularRooms(3);
+      setPopularRooms(popularRoomsData);
+    } catch (err) {
+      console.error("Error fetching popular rooms:", err);
+    }
+  }, []);
+
+  // Main data fetching effect
+  useEffect(() => {
+    async function loadInitialData() {
+      setInitialLoading(true);
+      
+      // If we have cached rooms, fetch reservations first for faster loading
+      if (cachedData.rooms && cachedData.rooms.length > 0) {
+        await fetchReservationsForCurrentDate(cachedData.rooms);
+        await fetchPopularRooms();
+        // Then fetch fresh room data in the background
+        fetchRooms();
+      } else {
+        // Otherwise fetch everything sequentially
+        const roomsData = await fetchRooms();
+        await fetchReservationsForCurrentDate(roomsData);
+        await fetchPopularRooms();
+      }
+      
+      setInitialLoading(false);
+    }
+    
+    loadInitialData();
+  }, [lastRefresh, scheduleDate, fetchRooms, fetchReservationsForCurrentDate, fetchPopularRooms, cachedData.rooms]);
+
+  // Handler for search - optimized to avoid unnecessary re-renders
+  const handleSearch = useCallback(async (searchParams) => {
     try {
       setSearching(true);
       setSearchParams(searchParams);
@@ -91,7 +200,7 @@ function Rooms() {
         setScheduleDate(new Date(searchParams.startTime));
       }
       
-      // Search for available rooms
+      // Search for available rooms with fresh data
       const availableRooms = await searchAvailableRooms(
         searchParams.startTime,
         searchParams.endTime,
@@ -99,9 +208,10 @@ function Rooms() {
       );
       
       setRooms(availableRooms);
+      setDisplayedRooms(availableRooms.slice(0, INITIAL_ROOM_LIMIT));
       
       // Update reservations for schedule view
-      await fetchReservationsForRooms(availableRooms);
+      await fetchReservationsForCurrentDate(availableRooms);
       
       setSearching(false);
     } catch (err) {
@@ -109,19 +219,16 @@ function Rooms() {
       setError("Failed to search for available rooms. Please try again.");
       setSearching(false);
     }
-  };
+  }, [fetchReservationsForCurrentDate]);
 
-  const clearSearch = async () => {
+  // Clear search handler
+  const clearSearch = useCallback(async () => {
     try {
       setSearching(true);
       setSearchParams(null);
       
-      // Load all rooms again
-      const roomsData = await getRooms();
-      setRooms(roomsData);
-      
-      // Update reservations for schedule view
-      await fetchReservationsForRooms(roomsData);
+      // Refresh data when clearing search
+      setLastRefresh(Date.now());
       
       setSearching(false);
     } catch (err) {
@@ -129,25 +236,51 @@ function Rooms() {
       setError("Failed to reset room list. Please try again.");
       setSearching(false);
     }
-  };
+  }, []);
 
-  const handleViewChange = (event, newView) => {
+  // View mode change handler
+  const handleViewChange = useCallback((event, newView) => {
     if (newView !== null) {
       setViewMode(newView);
     }
-  };
+  }, []);
 
-  const handleScheduleDateChange = (newDate) => {
+  // Schedule date change handler
+  const handleScheduleDateChange = useCallback((newDate) => {
     setScheduleDate(newDate);
-  };
+  }, []);
 
-  if (loading) return (
-    <Container maxWidth="lg">
-      <Box sx={{ my: 4, display: 'flex', justifyContent: 'center' }}>
-        <CircularProgress />
+  // Loading placeholders
+  const renderLoadingPlaceholders = useMemo(() => {
+    return (
+      <Box sx={{ width: '100%' }}>
+        <LinearProgress />
+        <Box sx={{ mt: 4 }}>
+          {[1, 2, 3].map((item) => (
+            <Paper key={item} sx={{ p: 2, mb: 2 }}>
+              <Skeleton variant="text" width="60%" height={40} />
+              <Skeleton variant="text" width="40%" height={20} sx={{ mb: 1 }} />
+              <Skeleton variant="rectangular" width="100%" height={120} />
+            </Paper>
+          ))}
+        </Box>
       </Box>
-    </Container>
-  );
+    );
+  }, []);
+
+  // Show main loading state
+  if (initialLoading && !cachedData.rooms) {
+    return (
+      <Container maxWidth="lg">
+        <Box sx={{ my: 4 }}>
+          <Typography variant="h4" component="h1" gutterBottom>
+            Room Finder
+          </Typography>
+          {renderLoadingPlaceholders}
+        </Box>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="lg">
@@ -201,37 +334,43 @@ function Rooms() {
           </Alert>
         )}
         
-        {searching ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
-            <CircularProgress />
+        {/* Show loading indicator for searches */}
+        {searching && (
+          <Box sx={{ width: '100%', mb: 3 }}>
+            <LinearProgress />
           </Box>
-        ) : (
-          <>
-            {/* Popular Rooms (show only when not searching and in list view) */}
-            {!searchParams && viewMode === 'list' && popularRooms.length > 0 && (
-              <>
-                <Typography variant="h5" sx={{ mt: 4, mb: 2 }}>
-                  Popular Rooms
-                </Typography>
-                <Grid container spacing={3} sx={{ mb: 4 }}>
-                  {popularRooms.map((room) => (
-                    <Grid item xs={12} md={4} key={room.id}>
-                      <RoomCard room={room} isPopular={true} />
-                    </Grid>
-                  ))}
-                </Grid>
-                <Divider sx={{ mb: 4 }} />
-              </>
-            )}
-            
-            {/* View Mode Content */}
-            {viewMode === 'list' && (
-              <>
-                <Typography variant="h5" sx={{ mb: 2 }}>
-                  {searchParams ? 'Available Rooms' : 'All Rooms'}
-                </Typography>
-                
-                {rooms.length === 0 ? (
+        )}
+        
+        {/* Main Content Area */}
+        <>
+          {/* Popular Rooms (show only when not searching and in list view) */}
+          {!searchParams && viewMode === 'list' && popularRooms.length > 0 && (
+            <>
+              <Typography variant="h5" sx={{ mt: 4, mb: 2 }}>
+                Popular Rooms
+              </Typography>
+              <Grid container spacing={3} sx={{ mb: 4 }}>
+                {popularRooms.map((room) => (
+                  <Grid item xs={12} md={4} key={room.id}>
+                    <RoomCard room={room} isPopular={true} />
+                  </Grid>
+                ))}
+              </Grid>
+              <Divider sx={{ mb: 4 }} />
+            </>
+          )}
+          
+          {/* View Mode Content */}
+          {viewMode === 'list' && (
+            <>
+              <Typography variant="h5" sx={{ mb: 2 }}>
+                {searchParams ? 'Available Rooms' : 'All Rooms'}
+              </Typography>
+              
+              {rooms.length === 0 ? (
+                roomsLoading ? (
+                  renderLoadingPlaceholders
+                ) : (
                   <Paper sx={{ p: 3, textAlign: 'center' }}>
                     <Typography variant="h6">
                       {searchParams 
@@ -249,25 +388,52 @@ function Rooms() {
                       </Button>
                     )}
                   </Paper>
-                ) : (
+                )
+              ) : (
+                <>
                   <Grid container spacing={3}>
-                    {rooms.map((room) => (
+                    {displayedRooms.map((room) => (
                       <Grid item xs={12} md={4} key={room.id}>
                         <RoomCard room={room} />
                       </Grid>
                     ))}
                   </Grid>
-                )}
-              </>
-            )}
-            
-            {viewMode === 'schedule' && (
-              <>
-                <Typography variant="h5" sx={{ mb: 2 }}>
-                  Room Schedule
-                </Typography>
-                
-                {rooms.length === 0 ? (
+                  
+                  {/* Load more button */}
+                  {displayedRooms.length < rooms.length && (
+                    <Box sx={{ mt: 3, textAlign: 'center' }}>
+                      <Button 
+                        variant="outlined" 
+                        onClick={loadMoreRooms}
+                        disabled={loadingMore}
+                        endIcon={loadingMore ? <CircularProgress size={20} /> : null}
+                      >
+                        {loadingMore ? 'Loading...' : `Load More (Showing ${displayedRooms.length} of ${rooms.length})`}
+                      </Button>
+                    </Box>
+                  )}
+                </>
+              )}
+            </>
+          )}
+          
+          {viewMode === 'schedule' && (
+            <>
+              <Typography variant="h5" sx={{ mb: 2 }}>
+                Room Schedule
+              </Typography>
+              
+              {/* Show reservation loading indicator */}
+              {reservationsLoading && (
+                <Box sx={{ width: '100%', mb: 3 }}>
+                  <LinearProgress />
+                </Box>
+              )}
+              
+              {rooms.length === 0 ? (
+                roomsLoading ? (
+                  renderLoadingPlaceholders
+                ) : (
                   <Paper sx={{ p: 3, textAlign: 'center' }}>
                     <Typography variant="h6">
                       {searchParams 
@@ -285,42 +451,57 @@ function Rooms() {
                       </Button>
                     )}
                   </Paper>
-                ) : (
-                  <RoomScheduleView 
-                    rooms={rooms} 
-                    reservations={reservations}
-                    date={scheduleDate}
-                    onDateChange={handleScheduleDateChange}
-                  />
-                )}
-              </>
-            )}
-            
-            {viewMode === 'map' && (
-              <>
-                <Typography variant="h5" sx={{ mb: 2 }}>
-                  Room Map
-                </Typography>
-                
-                <Paper sx={{ p: 3, textAlign: 'center' }}>
-                  <Typography variant="h6">
-                    3D Map visualization is under development
-                  </Typography>
-                  <Typography paragraph sx={{ my: 2 }}>
-                    Check back soon for an interactive 3D map of our campus rooms
-                  </Typography>
+                )
+              ) : (
+                <RoomScheduleView 
+                  rooms={displayedRooms} 
+                  reservations={reservations}
+                  date={scheduleDate}
+                  onDateChange={handleScheduleDateChange}
+                  loading={roomsLoading || reservationsLoading}
+                />
+              )}
+              
+              {/* Load more button for schedule view */}
+              {displayedRooms.length < rooms.length && (
+                <Box sx={{ mt: 3, textAlign: 'center' }}>
                   <Button 
                     variant="outlined" 
-                    color="primary"
-                    onClick={() => setViewMode('schedule')}
+                    onClick={loadMoreRooms}
+                    disabled={loadingMore}
+                    endIcon={loadingMore ? <CircularProgress size={20} /> : null}
                   >
-                    View Schedule Instead
+                    {loadingMore ? 'Loading...' : `Load More Rooms (Showing ${displayedRooms.length} of ${rooms.length})`}
                   </Button>
-                </Paper>
-              </>
-            )}
-          </>
-        )}
+                </Box>
+              )}
+            </>
+          )}
+          
+          {viewMode === 'map' && (
+            <>
+              <Typography variant="h5" sx={{ mb: 2 }}>
+                Room Map
+              </Typography>
+              
+              <Paper sx={{ p: 3, textAlign: 'center' }}>
+                <Typography variant="h6">
+                  3D Map visualization is under development
+                </Typography>
+                <Typography paragraph sx={{ my: 2 }}>
+                  Check back soon for an interactive 3D map of our campus rooms
+                </Typography>
+                <Button 
+                  variant="outlined" 
+                  color="primary"
+                  onClick={() => setViewMode('schedule')}
+                >
+                  View Schedule Instead
+                </Button>
+              </Paper>
+            </>
+          )}
+        </>
       </Box>
     </Container>
   );

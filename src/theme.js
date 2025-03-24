@@ -75,6 +75,95 @@ const theme = createTheme({
     borderRadius: 4, // More conservative border radius for professional look
   },
   components: {
+    MuiCssBaseline: {
+      styleOverrides: `
+        @keyframes shimmer {
+          0% {
+            background-position: -468px 0;
+          }
+          100% {
+            background-position: 468px 0;
+          }
+        }
+        
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        
+        .skeleton-loader {
+          background: linear-gradient(to right, #f6f7f8 8%, #edeef1 18%, #f6f7f8 33%);
+          background-size: 800px 104px;
+          animation: shimmer 1.5s infinite linear;
+          position: relative;
+          border-radius: 4px;
+        }
+        
+        .skeleton-card {
+          height: 200px;
+          width: 100%;
+          margin-bottom: 16px;
+        }
+        
+        .skeleton-text {
+          height: 16px;
+          width: 80%;
+          margin-bottom: 8px;
+        }
+        
+        .skeleton-text-short {
+          height: 16px;
+          width: 60%;
+          margin-bottom: 8px;
+        }
+        
+        .loading-container {
+          position: relative;
+          min-height: 200px;
+        }
+        
+        .fade-in {
+          animation: fadeIn 0.5s ease-in-out;
+        }
+        
+        .MuiLinearProgress-root {
+          height: 4px !important;
+          border-radius: 2px !important;
+        }
+        
+        .MuiCircularProgress-colorPrimary {
+          color: ${ritOrange} !important;
+        }
+      `,
+    },
+    MuiLinearProgress: {
+      styleOverrides: {
+        root: {
+          height: 4,
+          borderRadius: 2
+        },
+        bar: {
+          borderRadius: 2
+        }
+      }
+    },
+    MuiCircularProgress: {
+      styleOverrides: {
+        colorPrimary: {
+          color: ritOrange
+        }
+      }
+    },
+    MuiSkeleton: {
+      styleOverrides: {
+        root: {
+          backgroundColor: '#f0f0f0'
+        },
+        rectangular: {
+          borderRadius: 4
+        }
+      }
+    },
     MuiButton: {
       styleOverrides: {
         root: {

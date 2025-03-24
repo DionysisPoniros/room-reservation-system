@@ -37,7 +37,7 @@ function RoomScheduleView({ rooms, reservations, date, onDateChange, loading = f
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTablet = useMediaQuery(theme.breakpoints.down('md'));
   
-  // Time slots to display (8:00 AM - 11:00 PM)
+  // Time slots to display (7:00 AM - 11:00 PM)
   const [timeSlots, setTimeSlots] = useState([]);
   
   // Selected date (default to today)
@@ -141,7 +141,7 @@ function RoomScheduleView({ rooms, reservations, date, onDateChange, loading = f
   }
   
   return (
-    <Paper sx={{ p: 2, overflowX: 'auto' }}>
+    <Paper sx={{ p: 2, overflowX: 'auto', width: '100%', maxWidth: '100%' }}>
       {/* Date navigation */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
         <IconButton onClick={goToPrevDay}>
@@ -157,18 +157,29 @@ function RoomScheduleView({ rooms, reservations, date, onDateChange, loading = f
         </IconButton>
       </Box>
       
-      {/* Schedule Table */}
-      <TableContainer component={Paper} sx={{ maxHeight: 600, border: '1px solid #e0e0e0' }}>
-        <Table stickyHeader size={isMobile ? "small" : "medium"}>
+      {/* Schedule Table - Updated with larger sizing */}
+      <TableContainer 
+        component={Paper} 
+        sx={{ 
+          maxHeight: 'calc(100vh - 250px)', // Larger height to show more rooms
+          border: '1px solid #e0e0e0',
+          width: '100%',
+          maxWidth: '100%'
+        }}
+      >
+        <Table stickyHeader size={isMobile ? "small" : "medium"} sx={{ width: '100%' }}>
           <TableHead>
             <TableRow>
               <TableCell 
                 sx={{ 
-                  width: isTablet ? 120 : 200, 
+                  width: isTablet ? 100 : 180, // Slightly smaller to allow more horizontal space
                   borderRight: '1px solid #e0e0e0',
                   fontWeight: 'bold',
                   bgcolor: theme.palette.primary.main,
-                  color: 'white'
+                  color: 'white',
+                  position: 'sticky',
+                  left: 0,
+                  zIndex: 3
                 }}
               >
                 Room
@@ -179,10 +190,12 @@ function RoomScheduleView({ rooms, reservations, date, onDateChange, loading = f
                   key={timeSlot} 
                   align="center"
                   sx={{ 
-                    minWidth: isMobile ? 40 : 60,
+                    minWidth: isMobile ? 40 : 58, // Slightly smaller cells
+                    width: isMobile ? 40 : 58,
                     fontWeight: 'bold',
                     bgcolor: theme.palette.primary.main,
-                    color: 'white'
+                    color: 'white',
+                    p: isMobile ? 0.5 : 1 // Smaller padding
                   }}
                 >
                   {format(timeSlot, 'h a')}
@@ -202,40 +215,41 @@ function RoomScheduleView({ rooms, reservations, date, onDateChange, loading = f
                     position: 'sticky',
                     left: 0,
                     bgcolor: 'background.paper',
-                    zIndex: 1
+                    zIndex: 1,
+                    p: 1 // Reduced padding
                   }}
                 >
-                  <Box sx={{ mb: 1 }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                  <Box sx={{ mb: 0.5 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
                       {room.name}
                     </Typography>
                     
-                    <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-                      <LocationOnIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} />
-                      <Typography variant="body2" color="text.secondary" noWrap>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.25 }}>
+                      <LocationOnIcon fontSize="small" sx={{ mr: 0.25, color: 'text.secondary', fontSize: '0.8rem' }} />
+                      <Typography variant="body2" color="text.secondary" noWrap sx={{ fontSize: '0.8rem' }}>
                         {room.location || 'No location'}
                       </Typography>
                     </Box>
                     
-                    <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-                      <PeopleIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} />
-                      <Typography variant="body2" color="text.secondary">
+                    <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.25 }}>
+                      <PeopleIcon fontSize="small" sx={{ mr: 0.25, color: 'text.secondary', fontSize: '0.8rem' }} />
+                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
                         {room.capacity} {room.capacity === 1 ? 'person' : 'people'}
                       </Typography>
                     </Box>
                     
-                    <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.25 }}>
                       {getEquipmentIcons(room.equipment)}
                     </Box>
                   </Box>
                   
-                  <Box sx={{ display: 'flex', mt: 1 }}>
+                  <Box sx={{ display: 'flex', mt: 0.5 }}>
                     <Button 
                       variant="outlined" 
                       size="small" 
                       component={Link} 
                       to={`/rooms/${room.id}`}
-                      sx={{ mr: 1, fontSize: '0.75rem', py: 0.5 }}
+                      sx={{ mr: 0.5, fontSize: '0.7rem', py: 0.25, minWidth: 'unset', px: 1 }}
                     >
                       Details
                     </Button>
@@ -244,7 +258,7 @@ function RoomScheduleView({ rooms, reservations, date, onDateChange, loading = f
                       size="small" 
                       component={Link} 
                       to={`/rooms/${room.id}/book`}
-                      sx={{ fontSize: '0.75rem', py: 0.5 }}
+                      sx={{ fontSize: '0.7rem', py: 0.25, minWidth: 'unset', px: 1 }}
                     >
                       Book
                     </Button>
@@ -261,7 +275,7 @@ function RoomScheduleView({ rooms, reservations, date, onDateChange, loading = f
                       sx={{ 
                         bgcolor: isBooked ? 'rgba(244, 67, 54, 0.1)' : 'rgba(76, 175, 80, 0.1)',
                         borderRight: '1px solid #f0f0f0',
-                        p: 1
+                        p: 0.75 // Reduced padding for more compact view
                       }}
                     >
                       {isBooked ? (
@@ -270,8 +284,8 @@ function RoomScheduleView({ rooms, reservations, date, onDateChange, loading = f
                           size="small" 
                           color="error"
                           sx={{ 
-                            height: 24, 
-                            fontSize: '0.7rem'
+                            height: 20, 
+                            fontSize: '0.65rem' // Smaller text
                           }} 
                         />
                       ) : (
@@ -280,11 +294,12 @@ function RoomScheduleView({ rooms, reservations, date, onDateChange, loading = f
                           size="small"
                           color="success"
                           component={Link}
-                          to={`/rooms/${room.id}/book`}
+                          to={`/rooms/${room.id}/book?time=${encodeURIComponent(new Date(timeSlot).toISOString())}`}
                           sx={{ 
-                            height: 24, 
-                            fontSize: '0.7rem',
-                            minWidth: 'auto'
+                            height: 20, 
+                            fontSize: '0.65rem',
+                            minWidth: 'auto',
+                            p: '2px 8px' // Smaller padding
                           }}
                         >
                           Available

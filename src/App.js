@@ -14,7 +14,7 @@ import RoomDetails from './pages/RoomDetails';
 import BookingForm from './components/booking/BookingForm';
 import MyReservations from './pages/MyReservations';
 import Login from './components/auth/Login';
-import AdminPage from './pages/AdminPage'; // Import the Admin page
+import AdminPage from './pages/AdminPage';
 import PrivateRoute from './components/auth/PrivateRoute';
 import { AuthProvider } from './contexts/AuthContext';
 

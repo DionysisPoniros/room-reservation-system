@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Container, 
   Typography, 
@@ -13,49 +13,122 @@ import {
   Select,
   MenuItem,
   Alert,
-  Snackbar
+  Snackbar,
+  Slider,
+  InputAdornment
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { useAuth } from '../../contexts/AuthContext';
-import { getRoom, createReservation, checkRoomAvailability } from '../../services/roomService';
+import { getRoom, createReservation, checkRoomAvailability, getUserDailyBookings } from '../../services/roomService';
+import { addHours, setMinutes, setSeconds, setMilliseconds, format } from 'date-fns';
 
 function BookingForm() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { currentUser } = useAuth();
   
   const [room, setRoom] = useState(null);
-  const [startTime, setStartTime] = useState(new Date());
-  const [endTime, setEndTime] = useState(new Date(new Date().setHours(new Date().getHours() + 1)));
+  const [startTime, setStartTime] = useState(roundToHour(new Date()));
+  const [duration, setDuration] = useState(1); // In hours
+  const [endTime, setEndTime] = useState(addHours(roundToHour(new Date()), 1));
   const [purpose, setPurpose] = useState('');
   const [attendees, setAttendees] = useState(1);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const [dailyBookingHours, setDailyBookingHours] = useState(0);
+  const [hoursRemaining, setHoursRemaining] = useState(5);
+  
+  // Function to round time to the nearest hour
+  function roundToHour(date) {
+    return setMilliseconds(setSeconds(setMinutes(new Date(date), 0), 0), 0);
+  }
 
+  // Parse time from URL if provided
   useEffect(() => {
-    const fetchRoom = async () => {
+    const params = new URLSearchParams(location.search);
+    const timeParam = params.get('time');
+    
+    if (timeParam) {
+      try {
+        const parsedTime = new Date(timeParam);
+        setStartTime(roundToHour(parsedTime));
+        setEndTime(addHours(roundToHour(parsedTime), 1));
+      } catch (err) {
+        console.error("Error parsing time parameter:", err);
+      }
+    }
+  }, [location]);
+  
+  useEffect(() => {
+    const fetchRoomAndUserData = async () => {
       try {
         setLoading(true);
+        
+        // Fetch room data
         const roomData = await getRoom(id);
         if (roomData) {
           setRoom(roomData);
         } else {
           setError("Room not found");
         }
+        
+        // Fetch user's daily bookings if user is logged in
+        if (currentUser) {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          
+          const bookings = await getUserDailyBookings(currentUser.uid, today, tomorrow);
+          
+          // Calculate total hours booked today
+          let totalHours = 0;
+          bookings.forEach(booking => {
+            const start = booking.startTime.toDate();
+            const end = booking.endTime.toDate();
+            const durationHours = (end - start) / (1000 * 60 * 60);
+            totalHours += durationHours;
+          });
+          
+          setDailyBookingHours(totalHours);
+          setHoursRemaining(5 - totalHours);
+        }
+        
         setLoading(false);
       } catch (err) {
-        console.error("Error fetching room:", err);
-        setError("Failed to load room details");
+        console.error("Error fetching data:", err);
+        setError("Failed to load data. Please try again.");
         setLoading(false);
       }
     };
 
-    fetchRoom();
-  }, [id]);
+    fetchRoomAndUserData();
+  }, [id, currentUser]);
+
+  // Update end time when start time or duration changes
+  useEffect(() => {
+    const newEndTime = addHours(startTime, duration);
+    setEndTime(newEndTime);
+  }, [startTime, duration]);
+
+  const handleDurationChange = (event, newValue) => {
+    // Make sure we don't exceed the remaining hours
+    const maxAllowedDuration = Math.min(5, hoursRemaining);
+    const actualDuration = Math.min(newValue, maxAllowedDuration);
+    setDuration(actualDuration);
+  };
+
+  const handleStartTimeChange = (newTime) => {
+    // Round to the nearest hour
+    const roundedTime = roundToHour(newTime);
+    setStartTime(roundedTime);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -65,8 +138,9 @@ function BookingForm() {
       return;
     }
     
-    if (startTime >= endTime) {
-      setError("End time must be after start time");
+    // Check if user has exceeded daily limit
+    if (dailyBookingHours + duration > 5) {
+      setError(`You can only book up to 5 hours per day. You already have ${dailyBookingHours.toFixed(1)} hours booked.`);
       return;
     }
     
@@ -74,7 +148,7 @@ function BookingForm() {
       setSubmitting(true);
       setError(null);
       
-      // Check if room is available
+      // Check if room is available for the selected time period
       const isAvailable = await checkRoomAvailability(id, startTime, endTime);
       
       if (!isAvailable) {
@@ -146,23 +220,40 @@ function BookingForm() {
                   <DateTimePicker
                     label="Start Time"
                     value={startTime}
-                    onChange={setStartTime}
+                    onChange={handleStartTimeChange}
                     renderInput={(params) => <TextField {...params} fullWidth required />}
                     minDateTime={new Date()}
+                    views={['year', 'month', 'day', 'hours']}
+                    ampm={true}
+                    minutesStep={60}
+                    helperText="Time will be rounded to the nearest hour"
                   />
                 </LocalizationProvider>
               </Grid>
               
               <Grid item xs={12} md={6}>
-                <LocalizationProvider dateAdapter={AdapterDateFns}>
-                  <DateTimePicker
-                    label="End Time"
-                    value={endTime}
-                    onChange={setEndTime}
-                    renderInput={(params) => <TextField {...params} fullWidth required />}
-                    minDateTime={startTime}
+                <Box>
+                  <Typography id="duration-slider" gutterBottom>
+                    Duration: {duration} {duration === 1 ? 'hour' : 'hours'}
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary" gutterBottom sx={{ display: 'block' }}>
+                    You have {hoursRemaining.toFixed(1)} hours remaining today (5 hour daily limit)
+                  </Typography>
+                  <Slider
+                    value={duration}
+                    onChange={handleDurationChange}
+                    aria-labelledby="duration-slider"
+                    valueLabelDisplay="auto"
+                    step={1}
+                    marks
+                    min={1}
+                    max={5}
+                    disabled={hoursRemaining < 1}
                   />
-                </LocalizationProvider>
+                </Box>
+                <Typography variant="body2" color="textSecondary">
+                  End time: {format(endTime, 'h:mm a EEEE, MMMM d, yyyy')}
+                </Typography>
               </Grid>
               
               <Grid item xs={12}>
@@ -190,6 +281,14 @@ function BookingForm() {
                 </FormControl>
               </Grid>
               
+              {dailyBookingHours > 0 && (
+                <Grid item xs={12}>
+                  <Alert severity="info">
+                    You have already booked {dailyBookingHours.toFixed(1)} hours today. Daily limit is 5 hours.
+                  </Alert>
+                </Grid>
+              )}
+              
               {error && (
                 <Grid item xs={12}>
                   <Alert severity="error">{error}</Alert>
@@ -201,7 +300,7 @@ function BookingForm() {
                   type="submit" 
                   variant="contained" 
                   color="primary"
-                  disabled={submitting}
+                  disabled={submitting || hoursRemaining < 1}
                   fullWidth
                 >
                   {submitting ? 'Processing...' : 'Confirm Booking'}
