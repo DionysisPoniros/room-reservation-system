@@ -106,8 +106,8 @@ function RoomScheduleView({ rooms, reservations, date, onDateChange, loading = f
     handleDateChange(nextDay);
   };
   
-  // Function to determine if a room is booked during a time slot
-  const isRoomBooked = (roomId, timeSlot) => {
+// Fixed isRoomBooked function for more intuitive time slot display
+const isRoomBooked = (roomId, timeSlot) => {
     try {
       if (!safeReservations || !safeReservations[roomId]) return false;
       
@@ -121,9 +121,17 @@ function RoomScheduleView({ rooms, reservations, date, onDateChange, loading = f
           const resStart = new Date(reservation.startTime.seconds * 1000);
           const resEnd = new Date(reservation.endTime.seconds * 1000);
           
-          return isWithinInterval(slotStart, { start: resStart, end: resEnd }) ||
-                isWithinInterval(slotEnd, { start: resStart, end: resEnd }) ||
-                (slotStart <= resStart && slotEnd >= resEnd);
+          // A more intuitive approach - a slot is booked if:
+          // 1. The reservation starts within this time slot, OR
+          // 2. The reservation started earlier and extends into this slot
+          // We handle the end time differently - using a "less than" instead of "less than or equal"
+          return (
+            // Reservation starts during this slot
+            (resStart >= slotStart && resStart < slotEnd) ||
+            
+            // Reservation started before this slot but extends into it
+            (resStart < slotStart && resEnd > slotStart)
+          );
         } catch (reservationTimeError) {
           console.error("Error with reservation time:", reservationTimeError);
           return false;

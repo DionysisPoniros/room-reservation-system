@@ -164,20 +164,50 @@ export const getReservationsForDate = async (startDate, endDate) => {
 };
 
 // Create a reservation
+// Enhanced createReservation function with better error handling
 export const createReservation = async (reservationData) => {
   try {
-    console.log("Creating reservation with data:", reservationData);
+    console.log("Creating reservation with data:", JSON.stringify(reservationData, (key, value) => {
+      // Handle Date objects in logging
+      if (value instanceof Date) return value.toISOString();
+      return value;
+    }, 2));
+    
+    // Validate required fields
+    const requiredFields = ['roomId', 'userId', 'startTime', 'endTime', 'status'];
+    const missingFields = requiredFields.filter(field => !reservationData[field]);
+    
+    if (missingFields.length > 0) {
+      throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+    }
     
     // Ensure startTime and endTime are properly formatted Date objects
-    const startTime = reservationData.startTime instanceof Date 
-      ? reservationData.startTime 
-      : new Date(reservationData.startTime);
+    let startTime, endTime;
     
-    const endTime = reservationData.endTime instanceof Date 
-      ? reservationData.endTime 
-      : new Date(reservationData.endTime);
-    
-    console.log(`Normalized times: ${startTime.toLocaleString()} to ${endTime.toLocaleString()}`);
+    try {
+      startTime = reservationData.startTime instanceof Date 
+        ? reservationData.startTime 
+        : new Date(reservationData.startTime);
+      
+      endTime = reservationData.endTime instanceof Date 
+        ? reservationData.endTime 
+        : new Date(reservationData.endTime);
+      
+      // Check if dates are valid
+      if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+        throw new Error("Invalid date format for startTime or endTime");
+      }
+      
+      // Check that start time is before end time
+      if (startTime >= endTime) {
+        throw new Error("Start time must be before end time");
+      }
+      
+      console.log(`Normalized times: ${startTime.toLocaleString()} to ${endTime.toLocaleString()}`);
+    } catch (dateError) {
+      console.error("Date conversion error:", dateError);
+      throw new Error(`Date conversion failed: ${dateError.message}`);
+    }
     
     // Convert Date objects to Firestore Timestamps
     const data = {
@@ -187,13 +217,46 @@ export const createReservation = async (reservationData) => {
       createdAt: Timestamp.now()
     };
     
-    const docRef = await addDoc(reservationsCollection, data);
-    console.log(`Created reservation with ID: ${docRef.id}`);
+    // Double-check we have valid Timestamps before proceeding
+    if (!data.startTime || !data.startTime.seconds || !data.endTime || !data.endTime.seconds) {
+      throw new Error("Failed to create valid Firestore Timestamps");
+    }
     
-    return docRef;
+    // Log the final data being sent to Firestore
+    console.log("Sending to Firestore:", {
+      ...data,
+      startTime: `Timestamp(${data.startTime.seconds})`,
+      endTime: `Timestamp(${data.endTime.seconds})`,
+      createdAt: `Timestamp(${data.createdAt.seconds})`
+    });
+    
+    // Attempt to add the document
+    try {
+      const docRef = await addDoc(reservationsCollection, data);
+      console.log(`Created reservation with ID: ${docRef.id}`);
+      return docRef;
+    } catch (firestoreError) {
+      console.error("Firestore error:", firestoreError);
+      
+      // Check for common Firestore errors
+      if (firestoreError.code === 'permission-denied') {
+        throw new Error("You don't have permission to create reservations");
+      } else if (firestoreError.code === 'unavailable') {
+        throw new Error("Database is currently unavailable. Please try again later");
+      } else if (firestoreError.code === 'invalid-argument') {
+        throw new Error("Invalid data format for reservation");
+      } else {
+        throw new Error(`Database error: ${firestoreError.message}`);
+      }
+    }
   } catch (error) {
     console.error("Error creating reservation:", error);
-    throw error;
+    // Re-throw with more information if needed
+    if (error.message.startsWith("Error")) {
+      throw error; // Already has a descriptive message
+    } else {
+      throw new Error(`Reservation creation failed: ${error.message}`);
+    }
   }
 };
 
@@ -221,24 +284,95 @@ export const getRoomReservations = async (roomId) => {
 };
 
 // Get user's daily bookings for tracking 5-hour limit
+// Improved getUserDailyBookings function
 export const getUserDailyBookings = async (userId, startDate, endDate) => {
   try {
-    const startTimestamp = Timestamp.fromDate(startDate);
-    const endTimestamp = Timestamp.fromDate(endDate);
+    // Ensure we have proper Date objects
+    const startDay = new Date(startDate);
+    startDay.setHours(0, 0, 0, 0); // Start of the day
     
+    const endDay = new Date(endDate);
+    endDay.setHours(23, 59, 59, 999); // End of the day
+    
+    const startTimestamp = Timestamp.fromDate(startDay);
+    const endTimestamp = Timestamp.fromDate(endDay);
+    const now = Timestamp.now();
+    
+    console.log(`Getting bookings for ${userId} from ${startDay.toLocaleString()} to ${endDay.toLocaleString()}`);
+    
+    // Find reservations that:
+    // 1. Belong to this user
+    // 2. Are not cancelled
+    // 3. EITHER: Start within the date range OR End within the date range OR Span across the date range
     const q = query(
       reservationsCollection,
       where("userId", "==", userId),
-      where("status", "!=", "cancelled"),
-      where("startTime", ">=", startTimestamp),
-      where("startTime", "<", endTimestamp)
+      where("status", "!=", "cancelled")
     );
     
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    
+    // Filter the results to include only bookings that overlap with the specified date range
+    // and exclude reservations that have already ended
+    const filteredBookings = snapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .filter(booking => {
+        const bookingStart = booking.startTime;
+        const bookingEnd = booking.endTime;
+        
+        // Keep only bookings that overlap with the date range
+        const overlapsWithDateRange = (
+          // Starts within date range
+          (bookingStart.seconds >= startTimestamp.seconds && 
+           bookingStart.seconds <= endTimestamp.seconds) ||
+          // Ends within date range
+          (bookingEnd.seconds >= startTimestamp.seconds && 
+           bookingEnd.seconds <= endTimestamp.seconds) ||
+          // Spans across date range
+          (bookingStart.seconds <= startTimestamp.seconds && 
+           bookingEnd.seconds >= endTimestamp.seconds)
+        );
+        
+        // Exclude reservations that have already ended
+        const hasNotEnded = bookingEnd.seconds >= now.seconds;
+        
+        return overlapsWithDateRange && hasNotEnded;
+      });
+    
+    console.log(`Found ${filteredBookings.length} active bookings for today`);
+    
+    // Calculate the exact hours booked for today
+    const bookingsWithHours = filteredBookings.map(booking => {
+      // Convert timestamps to Date objects
+      const bookingStart = new Date(booking.startTime.seconds * 1000);
+      const bookingEnd = new Date(booking.endTime.seconds * 1000);
+      
+      // Clamp the start and end times to today's boundaries if they cross day boundaries
+      const effectiveStart = new Date(Math.max(bookingStart.getTime(), startDay.getTime()));
+      const effectiveEnd = new Date(Math.min(bookingEnd.getTime(), endDay.getTime()));
+      
+      // Calculate duration in hours
+      const durationMs = effectiveEnd.getTime() - effectiveStart.getTime();
+      const durationHours = durationMs / (1000 * 60 * 60);
+      
+      return {
+        ...booking,
+        effectiveStart,
+        effectiveEnd,
+        durationHours
+      };
+    });
+    
+    const totalHoursBooked = bookingsWithHours.reduce((total, booking) => total + booking.durationHours, 0);
+    console.log(`Total hours booked for today: ${totalHoursBooked.toFixed(2)}`);
+    
+    return {
+      bookings: bookingsWithHours,
+      totalHoursBooked
+    };
   } catch (error) {
     console.error("Error getting user daily bookings:", error);
     throw error;
@@ -307,7 +441,6 @@ export const checkRoomAvailability = async (roomId, startTime, endTime) => {
   }
 };
 
-// Search for available rooms (optimized)
 // Fixed searchAvailableRooms function for roomService.js
 export const searchAvailableRooms = async (startTime, endTime, filters = {}) => {
   try {
@@ -351,8 +484,22 @@ export const searchAvailableRooms = async (startTime, endTime, filters = {}) => 
     
     // Filter out rooms that have conflicting reservations
     const availableRooms = allRooms.filter(room => {
+      // Get reservations for this room
       const roomReservations = reservationsByRoom[room.id] || [];
-      return roomReservations.length === 0;
+      
+      // Check if any reservation conflicts with the requested time range
+      const hasConflict = roomReservations.some(reservation => {
+        const resStart = reservation.startTime;
+        const resEnd = reservation.endTime;
+        
+        // Check for overlap
+        return (
+          (start.seconds <= resEnd.seconds && end.seconds >= resStart.seconds)
+        );
+      });
+      
+      // Return rooms that don't have conflicts
+      return !hasConflict;
     });
     
     console.log(`After availability filtering: ${availableRooms.length} available rooms`);
