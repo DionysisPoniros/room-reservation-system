@@ -1,0 +1,93 @@
+[debug] [2025-03-24T06:44:42.418Z] ----------------------------------------------------------------------
+[debug] [2025-03-24T06:44:42.420Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\diony\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only hosting --debug
+[debug] [2025-03-24T06:44:42.420Z] CLI Version:   13.35.1
+[debug] [2025-03-24T06:44:42.420Z] Platform:      win32
+[debug] [2025-03-24T06:44:42.420Z] Node Version:  v22.14.0
+[debug] [2025-03-24T06:44:42.420Z] Time:          Mon Mar 24 2025 02:44:42 GMT-0400 (Eastern Daylight Time)
+[debug] [2025-03-24T06:44:42.420Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-03-24T06:44:42.529Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-03-24T06:44:42.530Z] > authorizing via signed-in user (dionysisponir@gmail.com)
+[debug] [2025-03-24T06:44:42.530Z] [iam] checking project drrs-45d19 for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2025-03-24T06:44:42.531Z] Checked if tokens are valid: true, expires at: 1742801464028
+[debug] [2025-03-24T06:44:42.532Z] Checked if tokens are valid: true, expires at: 1742801464028
+[debug] [2025-03-24T06:44:42.532Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/drrs-45d19:testIamPermissions [none]
+[debug] [2025-03-24T06:44:42.532Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/drrs-45d19:testIamPermissions x-goog-quota-user=projects/drrs-45d19
+[debug] [2025-03-24T06:44:42.533Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/drrs-45d19:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2025-03-24T06:44:42.747Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/drrs-45d19:testIamPermissions 200
+[debug] [2025-03-24T06:44:42.747Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/drrs-45d19:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2025-03-24T06:44:42.748Z] Checked if tokens are valid: true, expires at: 1742801464028
+[debug] [2025-03-24T06:44:42.748Z] Checked if tokens are valid: true, expires at: 1742801464028
+[debug] [2025-03-24T06:44:42.748Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/drrs-45d19 [none]
+[debug] [2025-03-24T06:44:43.048Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/drrs-45d19 200
+[debug] [2025-03-24T06:44:43.048Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/drrs-45d19 {"projectId":"drrs-45d19","projectNumber":"257505899666","displayName":"DRRS","name":"projects/drrs-45d19","resources":{"hostingSite":"drrs-45d19"},"state":"ACTIVE","etag":"1_16506be8-fb6e-45c6-82eb-532c7ae46fe1"}
+[info] 
+[info] === Deploying to 'drrs-45d19'...
+[info] 
+[info] i  deploying hosting 
+[debug] [2025-03-24T06:44:43.051Z] Checked if tokens are valid: true, expires at: 1742801464028
+[debug] [2025-03-24T06:44:43.051Z] Checked if tokens are valid: true, expires at: 1742801464028
+[debug] [2025-03-24T06:44:43.052Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/drrs-45d19/versions [none]
+[debug] [2025-03-24T06:44:43.052Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/drrs-45d19/versions {"status":"CREATED","labels":{"deployment-tool":"cli-firebase"}}
+[debug] [2025-03-24T06:44:43.585Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/drrs-45d19/versions 200
+[debug] [2025-03-24T06:44:43.585Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/drrs-45d19/versions {"name":"projects/257505899666/sites/drrs-45d19/versions/c7b64bd2f787b3b3","status":"CREATED","config":{},"labels":{"deployment-tool":"cli-firebase"}}
+[info] i  hosting[drrs-45d19]: beginning deploy... 
+[info] i  hosting[drrs-45d19]: found 11 files in public 
+[debug] [2025-03-24T06:44:43.594Z] [hosting] uploading with 200 concurrency
+[debug] [2025-03-24T06:44:43.595Z] Checked if tokens are valid: true, expires at: 1742801464028
+[debug] [2025-03-24T06:44:43.596Z] Checked if tokens are valid: true, expires at: 1742801464028
+[debug] [2025-03-24T06:44:43.596Z] [hosting] hash cache [cHVibGlj] stored for 11 files
+[debug] [2025-03-24T06:44:43.596Z] [hosting][hash queue][FINAL] {"max":1,"min":0,"avg":0,"active":0,"complete":11,"success":11,"errored":0,"retried":0,"total":11,"elapsed":2}
+[debug] [2025-03-24T06:44:43.596Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/257505899666/sites/drrs-45d19/versions/c7b64bd2f787b3b3:populateFiles [none]
+[debug] [2025-03-24T06:44:43.597Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/257505899666/sites/drrs-45d19/versions/c7b64bd2f787b3b3:populateFiles {"files":{"/robots.txt":"b2090cf9761ef60aa06e4fab97679bd43dfa5e5df073701ead5879d7c68f1ec5","/manifest.json":"4368aeaf848ae2e048765562c289452f33ad2a175c4b1951ea8bdf2ada0d5b10","/logo512.png":"212b102aa09e51b3b3e06647e81f7801a61333e171f6582e8124379aabccb41d","/logo192.png":"79e2b749561016bc8af300ea19f48347ceed3cb1a54f48ae456172eca45e08f0","/index.html":"172c8b08fd61f8dcbd08f1a67cefdbae685cdae8a2c47393b7d6af4dbdb5a2b2","/favicon.ico":"0899879977ec08c4d9b7255192dba1a603b2e0184408906bca1da97c49b745bc","/images/rit-logo.png":"fa97f6b0a35616790e97650abbf23855653514b4e89e2a2d01eca165521db918","/images/campus-image-4.jpg":"3bbce07436b76072e4dc7090e77a9fbd641903796ff72241cdecd3139d9232f0","/images/campus-image-3.jpg":"172249d58ab02131e1e7ebcae1df2bb50311376f7ad25b6b08aab7d9d5705bfe","/images/campus-image-2.jpg":"fc8c65e76ed1951e84961c0b83175a1c35d3fa15f86bc63ef84aef38d1e7ea4b","/images/campus-image-1.jpg":"366d182659e403834c3f6179ee544547524696ee5232b9bea2ade9003d5d3e84"}}
+[debug] [2025-03-24T06:44:43.768Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/257505899666/sites/drrs-45d19/versions/c7b64bd2f787b3b3:populateFiles 200
+[debug] [2025-03-24T06:44:43.768Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/257505899666/sites/drrs-45d19/versions/c7b64bd2f787b3b3:populateFiles {"uploadUrl":"https://upload-firebasehosting.googleapis.com/upload/sites/drrs-45d19/versions/c7b64bd2f787b3b3/files"}
+[debug] [2025-03-24T06:44:43.769Z] [hosting][populate queue][FINAL] {"max":174,"min":174,"avg":174,"active":0,"complete":1,"success":1,"errored":0,"retried":0,"total":1,"elapsed":174}
+[debug] [2025-03-24T06:44:43.769Z] [hosting] uploads queued: 0
+[debug] [2025-03-24T06:44:43.769Z] [hosting][upload queue][FINAL] {"max":0,"min":9999999999,"avg":0,"active":0,"complete":0,"success":0,"errored":0,"retried":0,"total":0,"elapsed":1742798683769}
+[info] i  hosting: upload complete 
+[info] +  hosting[drrs-45d19]: file upload complete 
+[debug] [2025-03-24T06:44:43.770Z] [hosting] deploy completed after 183ms
+[debug] [2025-03-24T06:44:43.770Z] [
+  {
+    "config": {
+      "public": "public",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ],
+      "site": "drrs-45d19"
+    },
+    "version": "projects/257505899666/sites/drrs-45d19/versions/c7b64bd2f787b3b3"
+  }
+]
+[info] i  hosting[drrs-45d19]: finalizing version... 
+[debug] [2025-03-24T06:44:43.771Z] Checked if tokens are valid: true, expires at: 1742801464028
+[debug] [2025-03-24T06:44:43.771Z] Checked if tokens are valid: true, expires at: 1742801464028
+[debug] [2025-03-24T06:44:43.771Z] >>> [apiv2][query] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/drrs-45d19/versions/c7b64bd2f787b3b3 updateMask=status%2Cconfig
+[debug] [2025-03-24T06:44:43.771Z] >>> [apiv2][body] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/drrs-45d19/versions/c7b64bd2f787b3b3 {"status":"FINALIZED","config":{"rewrites":[{"glob":"**","path":"/index.html"}]}}
+[debug] [2025-03-24T06:44:43.892Z] <<< [apiv2][status] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/drrs-45d19/versions/c7b64bd2f787b3b3 200
+[debug] [2025-03-24T06:44:43.892Z] <<< [apiv2][body] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/drrs-45d19/versions/c7b64bd2f787b3b3 {"name":"projects/257505899666/sites/drrs-45d19/versions/c7b64bd2f787b3b3","status":"FINALIZED","config":{"rewrites":[{"glob":"**","path":"/index.html"}]},"labels":{"deployment-tool":"cli-firebase"},"createTime":"2025-03-24T06:44:42.027671Z","createUser":{"email":"dionysisponir@gmail.com"},"finalizeTime":"2025-03-24T06:44:42.515405Z","finalizeUser":{"email":"dionysisponir@gmail.com"}}
+[debug] [2025-03-24T06:44:43.892Z] [hosting] finalized version for drrs-45d19:[object Object]
+[info] +  hosting[drrs-45d19]: version finalized 
+[info] i  hosting[drrs-45d19]: releasing new version... 
+[debug] [2025-03-24T06:44:43.893Z] Checked if tokens are valid: true, expires at: 1742801464028
+[debug] [2025-03-24T06:44:43.893Z] Checked if tokens are valid: true, expires at: 1742801464028
+[debug] [2025-03-24T06:44:43.893Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/drrs-45d19/channels/live/releases versionName=projects%2F257505899666%2Fsites%2Fdrrs-45d19%2Fversions%2Fc7b64bd2f787b3b3
+[debug] [2025-03-24T06:44:43.893Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/drrs-45d19/channels/live/releases {}
+[debug] [2025-03-24T06:44:44.079Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/drrs-45d19/channels/live/releases 200
+[debug] [2025-03-24T06:44:44.079Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/drrs-45d19/channels/live/releases {"name":"projects/257505899666/sites/drrs-45d19/channels/live/releases/1742798682153000","version":{"name":"projects/257505899666/sites/drrs-45d19/versions/c7b64bd2f787b3b3","status":"FINALIZED","config":{"rewrites":[{"glob":"**","path":"/index.html"}]},"labels":{"deployment-tool":"cli-firebase"},"createTime":"2025-03-24T06:44:42.027671Z","createUser":{"email":"dionysisponir@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocL4VCGKjUb4lFrAtoXvVDhpchaZQeZdBTVuk1wKg2NSBcD8jOs"},"finalizeTime":"2025-03-24T06:44:42.515405Z","finalizeUser":{"email":"dionysisponir@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocL4VCGKjUb4lFrAtoXvVDhpchaZQeZdBTVuk1wKg2NSBcD8jOs"}},"type":"DEPLOY","releaseTime":"2025-03-24T06:44:42.153Z","releaseUser":{"email":"dionysisponir@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocL4VCGKjUb4lFrAtoXvVDhpchaZQeZdBTVuk1wKg2NSBcD8jOs"}}
+[debug] [2025-03-24T06:44:44.079Z] [hosting] release: {"name":"projects/257505899666/sites/drrs-45d19/channels/live/releases/1742798682153000","version":{"name":"projects/257505899666/sites/drrs-45d19/versions/c7b64bd2f787b3b3","status":"FINALIZED","config":{"rewrites":[{"glob":"**","path":"/index.html"}]},"labels":{"deployment-tool":"cli-firebase"},"createTime":"2025-03-24T06:44:42.027671Z","createUser":{"email":"dionysisponir@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocL4VCGKjUb4lFrAtoXvVDhpchaZQeZdBTVuk1wKg2NSBcD8jOs"},"finalizeTime":"2025-03-24T06:44:42.515405Z","finalizeUser":{"email":"dionysisponir@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocL4VCGKjUb4lFrAtoXvVDhpchaZQeZdBTVuk1wKg2NSBcD8jOs"}},"type":"DEPLOY","releaseTime":"2025-03-24T06:44:42.153Z","releaseUser":{"email":"dionysisponir@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocL4VCGKjUb4lFrAtoXvVDhpchaZQeZdBTVuk1wKg2NSBcD8jOs"}}
+[info] +  hosting[drrs-45d19]: release complete 
+[info] 
+[info] +  Deploy complete! 
+[info] 
+[info] Project Console: https://console.firebase.google.com/project/drrs-45d19/overview
+[info] Hosting URL: https://drrs-45d19.web.app
