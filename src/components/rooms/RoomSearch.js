@@ -1,4 +1,4 @@
-// src/components/rooms/RoomSearch.js
+// src/components/rooms/RoomSearch.js - Fixed
 import React, { useState, useEffect } from 'react';
 import { 
   Box, 
@@ -20,7 +20,8 @@ import {
   IconButton,
   Collapse,
   useTheme,
-  CircularProgress
+  CircularProgress,
+  Alert
 } from '@mui/material';
 import { DateTimePicker, DatePicker } from '@mui/x-date-pickers';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -61,12 +62,14 @@ function RoomSearch({ onSearch }) {
   const [roomTypes, setRoomTypes] = useState([]);
   const [buildings, setBuildings] = useState([]);
   const [loadingFilters, setLoadingFilters] = useState(false);
+  const [error, setError] = useState(null);
   
   // Fetch room types and buildings from database
   useEffect(() => {
     const fetchFilterOptions = async () => {
       try {
         setLoadingFilters(true);
+        setError(null);
         
         // Fetch all rooms
         const roomsCollection = collection(db, 'rooms');
@@ -100,6 +103,7 @@ function RoomSearch({ onSearch }) {
         console.log("Buildings loaded:", Array.from(buildingNames));
       } catch (error) {
         console.error("Error fetching filter options:", error);
+        setError("Failed to load filter options. Please refresh the page.");
         setLoadingFilters(false);
       }
     };
@@ -108,46 +112,50 @@ function RoomSearch({ onSearch }) {
   }, []);
 
   const handleSearch = () => {
-    // In day search mode, set start and end times to cover the whole day
-    let searchStartTime = startTime;
-    let searchEndTime = endTime;
-    
-    if (searchMode === 'day') {
-      // Set start time to 7:00 AM of selected date
-      searchStartTime = set(selectedDate, { hours: 7, minutes: 0, seconds: 0, milliseconds: 0 });
-      // Set end time to 11:00 PM of selected date
-      searchEndTime = set(selectedDate, { hours: 23, minutes: 0, seconds: 0, milliseconds: 0 });
+    try {
+      // In day search mode, set start and end times to cover the whole day
+      let searchStartTime = startTime;
+      let searchEndTime = endTime;
+      
+      if (searchMode === 'day') {
+        // Set start time to 7:00 AM of selected date
+        searchStartTime = set(selectedDate, { hours: 7, minutes: 0, seconds: 0, milliseconds: 0 });
+        // Set end time to 11:00 PM of selected date
+        searchEndTime = set(selectedDate, { hours: 23, minutes: 0, seconds: 0, milliseconds: 0 });
+      }
+      
+      const searchParams = {
+        startTime: searchStartTime,
+        endTime: searchEndTime,
+        filters: {
+          capacity: capacity || 1,
+          equipment: selectedEquipment || [],
+          type: roomType || '',
+          building: building || ''
+        }
+      };
+      
+      console.log("Search parameters:", searchParams);
+      
+      // Call parent's onSearch function
+      onSearch(searchParams);
+      
+    } catch (err) {
+      console.error("Error preparing search:", err);
+      setError("Failed to prepare search. Please try again.");
     }
-    
-    console.log("Search parameters:", {
-      startTime: searchStartTime,
-      endTime: searchEndTime,
-      filters: {
-        capacity,
-        equipment: selectedEquipment,
-        type: roomType,
-        building
-      }
-    });
-    
-    onSearch({
-      startTime: searchStartTime,
-      endTime: searchEndTime,
-      filters: {
-        capacity,
-        equipment: selectedEquipment,
-        type: roomType,
-        building
-      }
-    });
   };
 
   // Update end time when start time changes
   const handleStartTimeChange = (newStartTime) => {
-    setStartTime(newStartTime);
-    // Ensure end time is at least 1 hour after start time
-    if (endTime <= newStartTime) {
-      setEndTime(addHours(newStartTime, 1));
+    try {
+      setStartTime(newStartTime);
+      // Ensure end time is at least 1 hour after start time
+      if (endTime <= newStartTime) {
+        setEndTime(addHours(newStartTime, 1));
+      }
+    } catch (err) {
+      console.error("Error updating start time:", err);
     }
   };
 
@@ -180,6 +188,12 @@ function RoomSearch({ onSearch }) {
           </FormGroup>
         </FormControl>
       </Box>
+      
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
       
       <Box component="form" noValidate>
         <Grid container spacing={3}>

@@ -1,4 +1,4 @@
-// src/services/roomService.js - Performance optimized
+// src/services/roomService.js - Fixed filtering logic
 import { 
   collection, 
   getDocs, 
@@ -20,24 +20,18 @@ import { db } from '../firebase/config';
 const roomsCollection = collection(db, 'rooms');
 const reservationsCollection = collection(db, 'reservations');
 
-// Get all rooms with optional filtering (optimized version)
+// Fixed getRooms function for roomService.js
 export const getRooms = async (filters = {}) => {
   try {
-    // Use a single query instead of fetching all rooms and filtering client-side
-    // when possible
+    console.log("Getting rooms with filters:", JSON.stringify(filters, null, 2));
+    
+    // Create base query
     let roomQuery = roomsCollection;
     
-    // Only add where clauses for database-indexed fields to keep queries efficient
-    // For non-indexed fields, we'll filter client-side
-    
-    // Check if there are indexed filters to apply
-    const hasIndexedFilters = filters.building && filters.building !== '';
-    
-    if (hasIndexedFilters) {
-      console.log("Using server-side filtering");
-      if (filters.building) {
-        roomQuery = query(roomQuery, where("building", "==", filters.building));
-      }
+    // Build query
+    if (filters.building && filters.building !== '') {
+      console.log(`Creating building query for "${filters.building}"`);
+      roomQuery = query(roomQuery, where("building", "==", filters.building));
     }
     
     // Always order by name for consistent results
@@ -45,36 +39,69 @@ export const getRooms = async (filters = {}) => {
     
     // Execute the query
     const snapshot = await getDocs(roomQuery);
+    
     let rooms = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
     
-    // Apply client-side filters for non-indexed fields
-    if (filters.capacity) {
-      const minCapacity = parseInt(filters.capacity);
-      rooms = rooms.filter(room => room.capacity >= minCapacity);
-    }
+    console.log(`Initial query returned ${rooms.length} rooms`);
     
-    if (!hasIndexedFilters && filters.type && filters.type !== '') {
-      rooms = rooms.filter(room => room.type === filters.type);
-    }
+    // Apply client-side filters for other fields
     
-    if (filters.equipment && filters.equipment.length > 0) {
+    // Filter by room type
+    if (filters.type && filters.type !== '') {
+      console.log(`Filtering for room type: "${filters.type}"`);
       rooms = rooms.filter(room => {
-        return room.equipment && filters.equipment.some(item => 
-          room.equipment.includes(item)
-        );
+        const result = room.type === filters.type;
+        if (!result) console.log(`Room ${room.name} filtered out - has type ${room.type}, not ${filters.type}`);
+        return result;
       });
+      console.log(`After type filter: ${rooms.length} rooms`);
     }
     
-    console.log(`Found ${rooms.length} rooms matching filters`);
+    // Filter by capacity
+    if (filters.capacity && parseInt(filters.capacity) > 0) {
+      const minCapacity = parseInt(filters.capacity);
+      console.log(`Filtering for rooms with capacity >= ${minCapacity}`);
+      rooms = rooms.filter(room => {
+        const hasCapacity = room.capacity >= minCapacity;
+        if (!hasCapacity) console.log(`Room ${room.name} filtered out - capacity ${room.capacity} < ${minCapacity}`);
+        return hasCapacity;
+      });
+      console.log(`After capacity filter: ${rooms.length} rooms`);
+    }
+    
+    // Filter by equipment
+    if (filters.equipment && Array.isArray(filters.equipment) && filters.equipment.length > 0) {
+      console.log(`Filtering for equipment:`, filters.equipment);
+      rooms = rooms.filter(room => {
+        if (!room.equipment || !Array.isArray(room.equipment)) {
+          console.log(`Room ${room.name} filtered out - no equipment data`);
+          return false;
+        }
+        
+        // Check if ALL required equipment is available in the room
+        const hasAllEquipment = filters.equipment.every(item => room.equipment.includes(item));
+        
+        if (!hasAllEquipment) {
+          console.log(`Room ${room.name} filtered out - missing required equipment`);
+          console.log(`Room has: ${room.equipment.join(', ')}`);
+          console.log(`Required: ${filters.equipment.join(', ')}`);
+        }
+        
+        return hasAllEquipment;
+      });
+      console.log(`After equipment filter: ${rooms.length} rooms`);
+    }
+    
+    console.log(`Final filtered result: ${rooms.length} rooms`);
     return rooms;
   } catch (error) {
     console.error("Error getting rooms:", error);
     throw error;
   }
-};
+}
 
 // Get a specific room (with caching)
 const roomCache = new Map();
@@ -109,6 +136,7 @@ export const getRoom = async (id) => {
 // Get all reservations for a specific date range (more efficient)
 export const getReservationsForDate = async (startDate, endDate) => {
   try {
+    console.log(`Getting reservations from ${startDate} to ${endDate}`);
     const startTimestamp = Timestamp.fromDate(new Date(startDate));
     const endTimestamp = Timestamp.fromDate(new Date(endDate));
     
@@ -122,10 +150,13 @@ export const getReservationsForDate = async (startDate, endDate) => {
     );
     
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
+    const reservations = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
+    
+    console.log(`Found ${reservations.length} reservations for the date range`);
+    return reservations;
   } catch (error) {
     console.error("Error getting reservations for date:", error);
     throw error;
@@ -277,22 +308,23 @@ export const checkRoomAvailability = async (roomId, startTime, endTime) => {
 };
 
 // Search for available rooms (optimized)
+// Fixed searchAvailableRooms function for roomService.js
 export const searchAvailableRooms = async (startTime, endTime, filters = {}) => {
   try {
     console.log(`Searching for available rooms from ${new Date(startTime).toLocaleString()} to ${new Date(endTime).toLocaleString()}`);
+    console.log("With filters:", JSON.stringify(filters, null, 2));
     
     // Convert times to timestamps
     const start = Timestamp.fromDate(new Date(startTime));
     const end = Timestamp.fromDate(new Date(endTime));
     
     // First get all rooms matching the filters
-    const rooms = await getRooms(filters);
-    console.log(`Found ${rooms.length} rooms matching filters, checking availability...`);
+    const allRooms = await getRooms(filters);
+    console.log(`Found ${allRooms.length} rooms matching filters, checking availability...`);
     
-    if (rooms.length === 0) return [];
+    if (allRooms.length === 0) return [];
     
     // Get all reservations that might conflict with our time range
-    // This is more efficient than checking each room individually
     const reservationsQuery = query(
       reservationsCollection,
       where("status", "!=", "cancelled"),
@@ -301,7 +333,12 @@ export const searchAvailableRooms = async (startTime, endTime, filters = {}) => 
     );
     
     const reservationsSnapshot = await getDocs(reservationsQuery);
-    const reservations = reservationsSnapshot.docs.map(doc => doc.data());
+    const reservations = reservationsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    console.log(`Found ${reservations.length} reservations in the requested time period`);
     
     // Group reservations by roomId for quick lookup
     const reservationsByRoom = {};
@@ -313,18 +350,18 @@ export const searchAvailableRooms = async (startTime, endTime, filters = {}) => 
     });
     
     // Filter out rooms that have conflicting reservations
-    const availableRooms = rooms.filter(room => {
+    const availableRooms = allRooms.filter(room => {
       const roomReservations = reservationsByRoom[room.id] || [];
       return roomReservations.length === 0;
     });
     
-    console.log(`Found ${availableRooms.length} available rooms for the requested time period`);
+    console.log(`After availability filtering: ${availableRooms.length} available rooms`);
     return availableRooms;
   } catch (error) {
     console.error("Error searching available rooms:", error);
     throw error;
   }
-};
+}
 
 // Get popular rooms (most booked) with caching
 let cachedPopularRooms = null;

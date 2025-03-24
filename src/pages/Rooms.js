@@ -25,6 +25,9 @@ import RoomSearch from '../components/rooms/RoomSearch';
 import RoomScheduleView from '../components/rooms/RoomScheduleView';
 import RoomCard from '../components/rooms/RoomCard';
 import { getRooms, searchAvailableRooms, getPopularRooms, getRoomReservations, getReservationsForDate } from '../services/roomService';
+import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { db } from '../firebase/config';
+
 // Icons
 import ViewListIcon from '@mui/icons-material/ViewList';
 import CalendarViewDayIcon from '@mui/icons-material/CalendarViewDay';
@@ -53,6 +56,20 @@ function Rooms() {
     lastFetched: null
   });
   const theme = useTheme();
+
+  // Fix any duplicate error message issues
+  useEffect(() => {
+    // When rooms are successfully loaded, clear any errors that might be showing
+    if (rooms.length > 0 && !roomsLoading && !reservationsLoading) {
+      // Clear errors after a short delay to ensure UI transitions are complete
+      const timer = setTimeout(() => {
+        setError(null);
+      }, 500);
+      
+      // Clean up timer
+      return () => clearTimeout(timer);
+    }
+  }, [rooms.length, roomsLoading, reservationsLoading]);
 
   // Cache key for localStorage
   const CACHE_KEY = 'roomFinderCache';
@@ -114,17 +131,31 @@ function Rooms() {
 
   // Load more rooms (for pagination)
   const loadMoreRooms = useCallback(() => {
-    setLoadingMore(true);
-    // Add another batch of rooms to the displayed list
-    const currentLength = displayedRooms.length;
-    const newRooms = rooms.slice(currentLength, currentLength + INITIAL_ROOM_LIMIT);
-    setDisplayedRooms(prev => [...prev, ...newRooms]);
-    setLoadingMore(false);
-  }, [rooms, displayedRooms]);
+    try {
+      setLoadingMore(true);
+      
+      // Add another batch of rooms to the displayed list
+      const currentLength = displayedRooms.length;
+      const nextBatch = rooms.slice(currentLength, currentLength + INITIAL_ROOM_LIMIT);
+      
+      if (nextBatch.length > 0) {
+        // Use functional update to ensure we're using the latest state
+        setDisplayedRooms(prevRooms => [...prevRooms, ...nextBatch]);
+        console.log(`Added ${nextBatch.length} more rooms to display`);
+      } else {
+        console.log("No more rooms to load");
+      }
+    } catch (error) {
+      console.error("Error loading more rooms:", error);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [rooms, displayedRooms, INITIAL_ROOM_LIMIT]);
 
   // Fetch reservations for the current date only (more efficient)
   const fetchReservationsForCurrentDate = useCallback(async (roomsToCheck) => {
     try {
+      console.log("Fetching reservations for date:", scheduleDate);
       setReservationsLoading(true);
       
       // Get start and end of current date
@@ -134,23 +165,44 @@ function Rooms() {
       const dateEnd = new Date(scheduleDate);
       dateEnd.setHours(23, 59, 59, 999);
       
-      // Get all reservations for this date range (single query)
-      const allReservations = await getReservationsForDate(dateStart, dateEnd);
-      
-      // Group by roomId
-      const reservationsByRoom = {};
-      allReservations.forEach(res => {
-        if (!reservationsByRoom[res.roomId]) {
-          reservationsByRoom[res.roomId] = [];
-        }
-        reservationsByRoom[res.roomId].push(res);
-      });
-      
-      setReservations(reservationsByRoom);
-      setReservationsLoading(false);
+      // Direct Firestore query to avoid any potential issues in the service
+      try {
+        const reservationsCol = collection(db, 'reservations');
+        const q = query(
+          reservationsCol,
+          where("status", "!=", "cancelled"),
+          orderBy("startTime")
+        );
+        
+        const snapshot = await getDocs(q);
+        
+        // Group by roomId
+        const reservationsByRoom = {};
+        snapshot.docs.forEach(doc => {
+          const res = { id: doc.id, ...doc.data() };
+          
+          if (!reservationsByRoom[res.roomId]) {
+            reservationsByRoom[res.roomId] = [];
+          }
+          reservationsByRoom[res.roomId].push(res);
+        });
+        
+        console.log(`Fetched ${snapshot.docs.length} reservations for ${Object.keys(reservationsByRoom).length} rooms`);
+        setReservations(reservationsByRoom);
+        setReservationsLoading(false);
+      } catch (firestoreErr) {
+        console.error("Firestore error fetching reservations:", firestoreErr);
+        // Initialize with empty object on error
+        setReservations({});
+        setReservationsLoading(false);
+        // Don't throw here, just log the error
+      }
     } catch (err) {
       console.error("Error fetching reservations:", err);
+      // Initialize with empty object to prevent continuous loading
+      setReservations({});
       setReservationsLoading(false);
+      // Don't throw here, just log the error
     }
   }, [scheduleDate]);
 
@@ -166,77 +218,137 @@ function Rooms() {
 
   // Main data fetching effect
   useEffect(() => {
+    // Prevent multiple simultaneous data fetches
+    let isMounted = true;
+    
     async function loadInitialData() {
+      if (!isMounted) return;
       setInitialLoading(true);
       
-      // If we have cached rooms, fetch reservations first for faster loading
-      if (cachedData.rooms && cachedData.rooms.length > 0) {
-        await fetchReservationsForCurrentDate(cachedData.rooms);
-        await fetchPopularRooms();
-        // Then fetch fresh room data in the background
-        fetchRooms();
-      } else {
-        // Otherwise fetch everything sequentially
+      try {
+        console.log("Starting initial data load...");
+        
+        // First load rooms - always need this data
         const roomsData = await fetchRooms();
-        await fetchReservationsForCurrentDate(roomsData);
+        
+        if (!isMounted) return;
+        
+        // After rooms are loaded, fetch reservations directly
+        console.log(`Fetched ${roomsData.length} rooms, now loading reservations...`);
+        
+        try {
+          await fetchReservationsForCurrentDate(roomsData);
+        } catch (reservationError) {
+          console.error("Error fetching reservations:", reservationError);
+          // Don't fail the whole flow if just reservations fail
+        }
+        
+        if (!isMounted) return;
+        
+        // Finally, fetch popular rooms
         await fetchPopularRooms();
+      } catch (error) {
+        if (!isMounted) return;
+        console.error("Error loading initial data:", error);
+        setError("Failed to load data. Please try again.");
+      } finally {
+        if (isMounted) {
+          console.log("Finished loading initial data");
+          setInitialLoading(false);
+          setRoomsLoading(false);
+          setReservationsLoading(false);
+        }
       }
-      
-      setInitialLoading(false);
     }
     
     loadInitialData();
-  }, [lastRefresh, scheduleDate, fetchRooms, fetchReservationsForCurrentDate, fetchPopularRooms, cachedData.rooms]);
+    
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      isMounted = false;
+    };
+  }, [lastRefresh, fetchRooms, fetchReservationsForCurrentDate, fetchPopularRooms]);
+  
+  // Separate effect for when schedule date changes
+  useEffect(() => {
+    // Skip on first render and only run when rooms are loaded
+    if (rooms.length > 0) {
+      fetchReservationsForCurrentDate(rooms);
+    }
+  }, [scheduleDate, rooms, fetchReservationsForCurrentDate]);
 
   // Handler for search - optimized to avoid unnecessary re-renders
   const handleSearch = useCallback(async (searchParams) => {
     try {
       setSearching(true);
       setSearchParams(searchParams);
+      // Explicitly clear any existing errors before starting the search
       setError(null);
+      
+      console.log("Search params:", searchParams);
       
       // If date is provided in search params, update schedule date
       if (searchParams.startTime) {
         setScheduleDate(new Date(searchParams.startTime));
       }
       
-      // Search for available rooms with fresh data
-      const availableRooms = await searchAvailableRooms(
-        searchParams.startTime,
-        searchParams.endTime,
-        searchParams.filters
-      );
-      
-      setRooms(availableRooms);
-      setDisplayedRooms(availableRooms.slice(0, INITIAL_ROOM_LIMIT));
-      
-      // Update reservations for schedule view
-      await fetchReservationsForCurrentDate(availableRooms);
-      
-      setSearching(false);
-    } catch (err) {
-      console.error("Error searching rooms:", err);
+      try {
+        // Search for available rooms with fresh data
+        const availableRooms = await searchAvailableRooms(
+          searchParams.startTime,
+          searchParams.endTime,
+          searchParams.filters
+        );
+        
+        console.log(`Found ${availableRooms.length} rooms matching filters`);
+        
+        // Update rooms state with filtered results
+        setRooms(availableRooms);
+        setDisplayedRooms(availableRooms.slice(0, INITIAL_ROOM_LIMIT));
+        
+        // Update reservations for schedule view with the filtered rooms
+        // Handle reservation fetching in a separate try/catch to prevent it from failing the whole search
+        try {
+          await fetchReservationsForCurrentDate(availableRooms);
+        } catch (reservationError) {
+          console.error("Error fetching reservations during search:", reservationError);
+          // Don't fail the whole search if just reservations fail
+          setReservations({});
+        }
+        
+        // Explicitly clear errors on success
+        setError(null);
+      } catch (searchError) {
+        console.error("Error in searchAvailableRooms:", searchError);
+        throw searchError; // Re-throw to be caught by outer try/catch
+      }
+    } catch (outerError) {
+      console.error("Outer error in handleSearch:", outerError);
       setError("Failed to search for available rooms. Please try again.");
+    } finally {
       setSearching(false);
     }
-  }, [fetchReservationsForCurrentDate]);
+  }, [fetchReservationsForCurrentDate, searchAvailableRooms]);
 
   // Clear search handler
   const clearSearch = useCallback(async () => {
     try {
+      console.log("Clearing search and resetting to all rooms");
       setSearching(true);
       setSearchParams(null);
       
-      // Refresh data when clearing search
-      setLastRefresh(Date.now());
+      // Reset room data
+      const allRooms = await fetchRooms();
       
-      setSearching(false);
+      // Reset reservations for the current date
+      await fetchReservationsForCurrentDate(allRooms);
     } catch (err) {
       console.error("Error clearing search:", err);
       setError("Failed to reset room list. Please try again.");
+    } finally {
       setSearching(false);
     }
-  }, []);
+  }, [fetchRooms, fetchReservationsForCurrentDate]);
 
   // View mode change handler
   const handleViewChange = useCallback((event, newView) => {
@@ -328,12 +440,6 @@ function Rooms() {
           </ToggleButtonGroup>
         </Box>
         
-        {error && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            {error}
-          </Alert>
-        )}
-        
         {/* Show loading indicator for searches */}
         {searching && (
           <Box sx={{ width: '100%', mb: 3 }}>
@@ -342,7 +448,14 @@ function Rooms() {
         )}
         
         {/* Main Content Area */}
-        <>
+        <Box>
+          {/* Show any errors at the top level only once */}
+          {error && (
+            <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+              {error}
+            </Alert>
+          )}
+          
           {/* Popular Rooms (show only when not searching and in list view) */}
           {!searchParams && viewMode === 'list' && popularRooms.length > 0 && (
             <>
@@ -455,7 +568,7 @@ function Rooms() {
               ) : (
                 <RoomScheduleView 
                   rooms={displayedRooms} 
-                  reservations={reservations}
+                  reservations={reservations || {}}
                   date={scheduleDate}
                   onDateChange={handleScheduleDateChange}
                   loading={roomsLoading || reservationsLoading}
@@ -501,7 +614,7 @@ function Rooms() {
               </Paper>
             </>
           )}
-        </>
+        </Box>
       </Box>
     </Container>
   );

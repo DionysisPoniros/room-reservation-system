@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Container, Typography, Box, Button, Paper, Grid, Chip } from '@mui/material';
 import { getRoom, getRoomReservations } from '../services/roomService';
 
 function RoomDetails() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [room, setRoom] = useState(null);
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +35,10 @@ function RoomDetails() {
 
     fetchRoomDetails();
   }, [id]);
+
+  const handleBookRoom = () => {
+    navigate(`/rooms/${id}/book`);
+  };
 
   if (loading) return <Typography>Loading room details...</Typography>;
   if (error) return <Typography color="error">{error}</Typography>;
@@ -94,7 +99,11 @@ function RoomDetails() {
           </Grid>
         </Paper>
         
-        <Button variant="contained" color="primary">
+        <Button 
+          variant="contained" 
+          color="primary"
+          onClick={handleBookRoom}
+        >
           Book This Room
         </Button>
       </Box>

@@ -17,7 +17,8 @@ import {
   Grid,
   useTheme,
   useMediaQuery,
-  CircularProgress
+  CircularProgress,
+  Alert
 } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { format, addDays, isSameDay, parseISO, addHours, isWithinInterval } from 'date-fns';
@@ -43,32 +44,53 @@ function RoomScheduleView({ rooms, reservations, date, onDateChange, loading = f
   // Selected date (default to today)
   const [selectedDate, setSelectedDate] = useState(date || new Date());
   
+  // Error state
+  const [error, setError] = useState(null);
+  
+  // Set default values if props are undefined
+  const safeRooms = rooms || [];
+  const safeReservations = reservations || {};
+  
   useEffect(() => {
-    // Generate time slots
-    const slots = [];
-    const startHour = 7;  // 7:00 AM
-    const endHour = 23;  // 11:00 PM
-    
-    for (let hour = startHour; hour <= endHour; hour++) {
-      slots.push(
-        new Date(selectedDate).setHours(hour, 0, 0, 0)
-      );
+    try {
+      // Generate time slots
+      const slots = [];
+      const startHour = 7;  // 7:00 AM
+      const endHour = 23;  // 11:00 PM
+      
+      const dateToUse = selectedDate || new Date();
+      
+      for (let hour = startHour; hour <= endHour; hour++) {
+        const slotDate = new Date(dateToUse);
+        slotDate.setHours(hour, 0, 0, 0);
+        slots.push(slotDate.getTime());
+      }
+      
+      setTimeSlots(slots);
+      setError(null);
+    } catch (err) {
+      console.error("Error generating time slots:", err);
+      setError("Could not generate schedule. Please try again.");
     }
-    
-    setTimeSlots(slots);
   }, [selectedDate]);
   
   useEffect(() => {
     if (date && !isSameDay(date, selectedDate)) {
       setSelectedDate(date);
     }
-  }, [date]);
+  }, [date, selectedDate]);
   
   // Handle date change and propagate to parent
   const handleDateChange = (newDate) => {
-    setSelectedDate(newDate);
-    if (onDateChange) {
-      onDateChange(newDate);
+    try {
+      setSelectedDate(newDate);
+      if (onDateChange) {
+        onDateChange(newDate);
+      }
+      setError(null);
+    } catch (err) {
+      console.error("Error changing date:", err);
+      setError("Could not change date. Please try again.");
     }
   };
   
@@ -86,19 +108,31 @@ function RoomScheduleView({ rooms, reservations, date, onDateChange, loading = f
   
   // Function to determine if a room is booked during a time slot
   const isRoomBooked = (roomId, timeSlot) => {
-    if (!reservations || !reservations[roomId]) return false;
-    
-    const slotStart = new Date(timeSlot);
-    const slotEnd = addHours(new Date(timeSlot), 1);
-    
-    return reservations[roomId].some(reservation => {
-      const resStart = new Date(reservation.startTime.seconds * 1000);
-      const resEnd = new Date(reservation.endTime.seconds * 1000);
+    try {
+      if (!safeReservations || !safeReservations[roomId]) return false;
       
-      return isWithinInterval(slotStart, { start: resStart, end: resEnd }) ||
-             isWithinInterval(slotEnd, { start: resStart, end: resEnd }) ||
-             (slotStart <= resStart && slotEnd >= resEnd);
-    });
+      const slotStart = new Date(timeSlot);
+      const slotEnd = addHours(new Date(timeSlot), 1);
+      
+      return safeReservations[roomId].some(reservation => {
+        if (!reservation.startTime || !reservation.endTime) return false;
+        
+        try {
+          const resStart = new Date(reservation.startTime.seconds * 1000);
+          const resEnd = new Date(reservation.endTime.seconds * 1000);
+          
+          return isWithinInterval(slotStart, { start: resStart, end: resEnd }) ||
+                isWithinInterval(slotEnd, { start: resStart, end: resEnd }) ||
+                (slotStart <= resStart && slotEnd >= resEnd);
+        } catch (reservationTimeError) {
+          console.error("Error with reservation time:", reservationTimeError);
+          return false;
+        }
+      });
+    } catch (err) {
+      console.error("Error checking if room is booked:", err, { roomId, timeSlot });
+      return false;
+    }
   };
   
   // Get equipment icons
@@ -134,9 +168,24 @@ function RoomScheduleView({ rooms, reservations, date, onDateChange, loading = f
   
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', my: 3 }}>
-        <CircularProgress />
+      <Box sx={{ display: 'flex', justifyContent: 'center', my: 3, flexDirection: 'column', alignItems: 'center' }}>
+        <CircularProgress sx={{ mb: 2 }} />
+        <Typography>Loading room schedule...</Typography>
       </Box>
+    );
+  }
+  
+  if (error) {
+    console.warn("Error in RoomScheduleView:", error);
+    // Don't show the error directly here
+    // Just log it to console to avoid duplicate error messages
+  }
+  
+  if (!safeRooms || safeRooms.length === 0) {
+    return (
+      <Paper sx={{ p: 3, textAlign: 'center' }}>
+        <Typography variant="h6">No rooms available for scheduling</Typography>
+      </Paper>
     );
   }
   
@@ -205,7 +254,7 @@ function RoomScheduleView({ rooms, reservations, date, onDateChange, loading = f
           </TableHead>
           
           <TableBody>
-            {rooms.map((room) => (
+            {safeRooms.map((room) => (
               <TableRow key={room.id} hover>
                 <TableCell 
                   component="th" 
