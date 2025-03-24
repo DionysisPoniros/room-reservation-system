@@ -28,10 +28,10 @@ const getRoomImage = (room) => {
   
   // For demo purposes - in a real application, these would be environment variables or imported
   const campusImages = {
-    campus1: "public/images/campus-image-1.jpg", // Brick building with sculpture
-    campus2: "public/images/campus-image-2.jpg", // Aerial view of main buildings
-    campus3: "public/images/campus-image-3.jpg", // Modern glass building
-    campus4: "public/images/campus-image-4.jpg"  // Green campus space
+    campus1: "/images/campus-image-1.jpg", // Brick building with sculpture
+    campus2: "/images/campus-image-2.jpg", // Aerial view of main buildings
+    campus3: "/images/campus-image-3.jpg", // Modern glass building
+    campus4: "/images/campus-image-4.jpg"  // Green campus space
   };
   
   // Determine which image to use based on room properties

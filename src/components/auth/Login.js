@@ -35,7 +35,7 @@ function Login() {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Campus image path - this would be imported or loaded from environment in a real app
-  const campusImagePath = "public/images/campus-image-1.jpg"; // Use one of the uploaded campus images
+  const campusImagePath = "/images/campus-image-1.jpg"; // Use one of the uploaded campus images
 
   async function handleSubmit(e) {
     e.preventDefault();
