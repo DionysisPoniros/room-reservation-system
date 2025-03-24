@@ -107,6 +107,9 @@ function RoomScheduleView({ rooms, reservations, date, onDateChange, loading = f
   };
   
 // Fixed isRoomBooked function for more intuitive time slot display
+// In src/components/rooms/RoomScheduleView.js
+
+// Modify the isRoomBooked function to properly check time slot availability
 const isRoomBooked = (roomId, timeSlot) => {
     try {
       if (!safeReservations || !safeReservations[roomId]) return false;
@@ -121,16 +124,9 @@ const isRoomBooked = (roomId, timeSlot) => {
           const resStart = new Date(reservation.startTime.seconds * 1000);
           const resEnd = new Date(reservation.endTime.seconds * 1000);
           
-          // A more intuitive approach - a slot is booked if:
-          // 1. The reservation starts within this time slot, OR
-          // 2. The reservation started earlier and extends into this slot
-          // We handle the end time differently - using a "less than" instead of "less than or equal"
+          // Check if reservation overlaps with this time slot
           return (
-            // Reservation starts during this slot
-            (resStart >= slotStart && resStart < slotEnd) ||
-            
-            // Reservation started before this slot but extends into it
-            (resStart < slotStart && resEnd > slotStart)
+            (resStart <= slotEnd && resEnd >= slotStart)
           );
         } catch (reservationTimeError) {
           console.error("Error with reservation time:", reservationTimeError);

@@ -153,56 +153,37 @@ function Rooms() {
   }, [rooms, displayedRooms, INITIAL_ROOM_LIMIT]);
 
   // Fetch reservations for the current date only (more efficient)
+  // In src/pages/Rooms.js
+
+// Modify the code in the fetchReservationsForCurrentDate function
+// to get all rooms, not just available ones
+
   const fetchReservationsForCurrentDate = useCallback(async (roomsToCheck) => {
     try {
       console.log("Fetching reservations for date:", scheduleDate);
       setReservationsLoading(true);
       
-      // Get start and end of current date
-      const dateStart = new Date(scheduleDate);
-      dateStart.setHours(0, 0, 0, 0);
+      // Get all reservations for the current date, not filtering by availability
+      const reservationsData = await getReservationsForDate(
+        new Date(scheduleDate.setHours(0, 0, 0, 0)),
+        new Date(scheduleDate.setHours(23, 59, 59, 999))
+      );
       
-      const dateEnd = new Date(scheduleDate);
-      dateEnd.setHours(23, 59, 59, 999);
+      // Group by roomId
+      const reservationsByRoom = {};
+      reservationsData.forEach(res => {
+        if (!reservationsByRoom[res.roomId]) {
+          reservationsByRoom[res.roomId] = [];
+        }
+        reservationsByRoom[res.roomId].push(res);
+      });
       
-      // Direct Firestore query to avoid any potential issues in the service
-      try {
-        const reservationsCol = collection(db, 'reservations');
-        const q = query(
-          reservationsCol,
-          where("status", "!=", "cancelled"),
-          orderBy("startTime")
-        );
-        
-        const snapshot = await getDocs(q);
-        
-        // Group by roomId
-        const reservationsByRoom = {};
-        snapshot.docs.forEach(doc => {
-          const res = { id: doc.id, ...doc.data() };
-          
-          if (!reservationsByRoom[res.roomId]) {
-            reservationsByRoom[res.roomId] = [];
-          }
-          reservationsByRoom[res.roomId].push(res);
-        });
-        
-        console.log(`Fetched ${snapshot.docs.length} reservations for ${Object.keys(reservationsByRoom).length} rooms`);
-        setReservations(reservationsByRoom);
-        setReservationsLoading(false);
-      } catch (firestoreErr) {
-        console.error("Firestore error fetching reservations:", firestoreErr);
-        // Initialize with empty object on error
-        setReservations({});
-        setReservationsLoading(false);
-        // Don't throw here, just log the error
-      }
+      setReservations(reservationsByRoom);
+      setReservationsLoading(false);
     } catch (err) {
       console.error("Error fetching reservations:", err);
-      // Initialize with empty object to prevent continuous loading
       setReservations({});
       setReservationsLoading(false);
-      // Don't throw here, just log the error
     }
   }, [scheduleDate]);
 
@@ -278,11 +259,13 @@ function Rooms() {
   }, [scheduleDate, rooms, fetchReservationsForCurrentDate]);
 
   // Handler for search - optimized to avoid unnecessary re-renders
+// In src/pages/Rooms.js
+
+// Modify the handleSearch function to keep all rooms but mark availability
   const handleSearch = useCallback(async (searchParams) => {
     try {
       setSearching(true);
       setSearchParams(searchParams);
-      // Explicitly clear any existing errors before starting the search
       setError(null);
       
       console.log("Search params:", searchParams);
@@ -292,43 +275,40 @@ function Rooms() {
         setScheduleDate(new Date(searchParams.startTime));
       }
       
-      try {
-        // Search for available rooms with fresh data
-        const availableRooms = await searchAvailableRooms(
-          searchParams.startTime,
-          searchParams.endTime,
-          searchParams.filters
-        );
-        
-        console.log(`Found ${availableRooms.length} rooms matching filters`);
-        
-        // Update rooms state with filtered results
-        setRooms(availableRooms);
-        setDisplayedRooms(availableRooms.slice(0, INITIAL_ROOM_LIMIT));
-        
-        // Update reservations for schedule view with the filtered rooms
-        // Handle reservation fetching in a separate try/catch to prevent it from failing the whole search
-        try {
-          await fetchReservationsForCurrentDate(availableRooms);
-        } catch (reservationError) {
-          console.error("Error fetching reservations during search:", reservationError);
-          // Don't fail the whole search if just reservations fail
-          setReservations({});
+      // Get all rooms that match the filter criteria (regardless of availability)
+      const filteredRooms = await getRooms(searchParams.filters);
+      
+      // Get all reservations for the date
+      const startOfDay = new Date(searchParams.startTime);
+      startOfDay.setHours(0, 0, 0, 0);
+      
+      const endOfDay = new Date(searchParams.startTime);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      const allReservations = await getReservationsForDate(startOfDay, endOfDay);
+      
+      // Group by roomId
+      const reservationsByRoom = {};
+      allReservations.forEach(res => {
+        if (!reservationsByRoom[res.roomId]) {
+          reservationsByRoom[res.roomId] = [];
         }
-        
-        // Explicitly clear errors on success
-        setError(null);
-      } catch (searchError) {
-        console.error("Error in searchAvailableRooms:", searchError);
-        throw searchError; // Re-throw to be caught by outer try/catch
-      }
-    } catch (outerError) {
-      console.error("Outer error in handleSearch:", outerError);
-      setError("Failed to search for available rooms. Please try again.");
+        reservationsByRoom[res.roomId].push(res);
+      });
+      
+      // Update state with all rooms (available and booked)
+      setRooms(filteredRooms);
+      setDisplayedRooms(filteredRooms.slice(0, INITIAL_ROOM_LIMIT));
+      setReservations(reservationsByRoom);
+      
+      setError(null);
+    } catch (err) {
+      console.error("Error in handleSearch:", err);
+      setError("Failed to search for rooms. Please try again.");
     } finally {
       setSearching(false);
     }
-  }, [fetchReservationsForCurrentDate, searchAvailableRooms]);
+  }, [fetchReservationsForCurrentDate]);
 
   // Clear search handler
   const clearSearch = useCallback(async () => {
