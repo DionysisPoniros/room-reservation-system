@@ -318,6 +318,8 @@ function Home() {
                   <Button 
                     variant="contained" 
                     color="primary"
+                    component = {Link}
+                    to="/admin"
                     fullWidth
                   >
                     Admin Dashboard

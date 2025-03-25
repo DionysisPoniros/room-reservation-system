@@ -563,39 +563,119 @@ export const getPopularRooms = async (limit = 5) => {
 };
 
 // Get room utilization stats
+// Enhanced version of getRoomUtilizationStats function for src/services/roomService.js
 export const getRoomUtilizationStats = async (roomId, startDate, endDate) => {
   try {
-    const start = Timestamp.fromDate(new Date(startDate));
-    const end = Timestamp.fromDate(new Date(endDate));
+    console.log(`Getting utilization stats for room ${roomId} from ${startDate} to ${endDate}`);
     
-    const q = query(
+    // Ensure we have proper Date objects
+    const start = startDate instanceof Date ? startDate : new Date(startDate);
+    const end = endDate instanceof Date ? endDate : new Date(endDate);
+    
+    // Convert to Firestore timestamps
+    const startTimestamp = Timestamp.fromDate(start);
+    const endTimestamp = Timestamp.fromDate(end);
+    
+    // Get room details first
+    const roomData = await getRoom(roomId);
+    if (!roomData) {
+      console.error(`Room with ID ${roomId} not found`);
+      throw new Error(`Room with ID ${roomId} not found`);
+    }
+    
+    console.log(`Found room: ${roomData.name}`);
+    
+    // First, try to get reservations that start within our date range
+    let q = query(
       reservationsCollection,
       where("roomId", "==", roomId),
-      where("startTime", ">=", start),
-      where("startTime", "<=", end),
-      where("status", "!=", "cancelled")
+      where("startTime", ">=", startTimestamp),
+      where("startTime", "<=", endTimestamp)
     );
     
-    const snapshot = await getDocs(q);
-    const reservations = snapshot.docs.map(doc => doc.data());
+    let snapshot = await getDocs(q);
+    let reservations = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    console.log(`Found ${reservations.length} reservations starting in date range`);
+    
+    // Now get any reservations that end within our range but might start before it
+    q = query(
+      reservationsCollection,
+      where("roomId", "==", roomId),
+      where("endTime", ">=", startTimestamp),
+      where("endTime", "<=", endTimestamp),
+      where("startTime", "<", startTimestamp)
+    );
+    
+    const endingInRangeSnapshot = await getDocs(q);
+    const endingInRange = endingInRangeSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    console.log(`Found ${endingInRange.length} additional reservations ending in date range`);
+    
+    // Combine and remove duplicates
+    const allReservations = [...reservations];
+    endingInRange.forEach(res => {
+      if (!allReservations.some(r => r.id === res.id)) {
+        allReservations.push(res);
+      }
+    });
+    
+    // Filter out cancelled reservations
+    const activeReservations = allReservations.filter(r => r.status !== 'cancelled');
+    console.log(`Found ${activeReservations.length} active reservations for this room in the date range`);
     
     // Calculate total hours booked
     let totalHoursBooked = 0;
-    reservations.forEach(reservation => {
-      const durationHours = (reservation.endTime.seconds - reservation.startTime.seconds) / 3600;
-      totalHoursBooked += durationHours;
+    activeReservations.forEach(reservation => {
+      try {
+        const startTime = reservation.startTime.toDate();
+        const endTime = reservation.endTime.toDate();
+        
+        // Calculate overlapping time with our date range
+        const overlapStart = new Date(Math.max(startTime.getTime(), start.getTime()));
+        const overlapEnd = new Date(Math.min(endTime.getTime(), end.getTime()));
+        
+        // Calculate hours in the overlap
+        const overlapHours = (overlapEnd - overlapStart) / (1000 * 60 * 60);
+        totalHoursBooked += overlapHours;
+        
+        console.log(`Reservation ${reservation.id} adds ${overlapHours.toFixed(2)} hours`);
+      } catch (err) {
+        console.error(`Error calculating hours for reservation ${reservation.id}:`, err);
+      }
     });
     
     // Calculate utilization percentage (assuming 12 operating hours per day)
-    const totalDays = Math.ceil((end.seconds - start.seconds) / (86400)); // 86400 seconds in a day
+    const totalDays = Math.ceil((end - start) / (86400 * 1000)); // 86400 seconds in a day
     const totalAvailableHours = totalDays * 12;
     const utilizationPercentage = (totalHoursBooked / totalAvailableHours) * 100;
     
+    console.log(`Total days: ${totalDays}, available hours: ${totalAvailableHours}, booked hours: ${totalHoursBooked}, utilization: ${utilizationPercentage.toFixed(2)}%`);
+    
+    // Calculate attendance stats if available
+    let totalAttendees = 0;
+    activeReservations.forEach(reservation => {
+      totalAttendees += reservation.attendees || 1;
+    });
+    
+    const capacityUtilization = activeReservations.length > 0 && roomData.capacity
+      ? (totalAttendees / (activeReservations.length * roomData.capacity)) * 100
+      : 0;
+    
     return {
-      totalReservations: reservations.length,
+      totalReservations: activeReservations.length,
       totalHoursBooked: totalHoursBooked,
       utilizationPercentage: utilizationPercentage,
-      averageReservationLength: totalHoursBooked / reservations.length || 0
+      averageReservationLength: activeReservations.length > 0 ? totalHoursBooked / activeReservations.length : 0,
+      capacityUtilization: capacityUtilization,
+      roomDetails: roomData,
+      reservations: activeReservations
     };
   } catch (error) {
     console.error("Error getting room utilization stats:", error);

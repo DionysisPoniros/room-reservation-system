@@ -103,10 +103,12 @@ function RoomAnalytics({ roomId }) {
     setEndDate(newEndDate);
   }, [timeRange]);
   
-  // Fetch room data
+  // Fetch room data when roomId changes
   useEffect(() => {
-    const fetchRoomData = async () => {
+    const fetchInitialRoomData = async () => {
       try {
+        console.log("Fetching initial room data for:", roomId);
+        
         setLoading(true);
         setError(null);
         
@@ -118,31 +120,91 @@ function RoomAnalytics({ roomId }) {
         
         // Get room details
         const roomData = await getRoom(roomId);
-        setRoom(roomData);
-        
-        setLoading(false);
+        if (roomData) {
+          console.log("Found room:", roomData);
+          setRoom(roomData);
+        } else {
+          setError("Room not found");
+          setLoading(false);
+        }
       } catch (err) {
-        console.error("Error fetching room data:", err);
+        console.error("Error fetching initial room data:", err);
         setError("Failed to load room data. Please try again.");
         setLoading(false);
       }
     };
     
-    fetchRoomData();
+    fetchInitialRoomData();
   }, [roomId]);
   
-  // Fetch analytics data when room or date range changes
+  // Fetch analytics data when room, startDate, or endDate changes
   useEffect(() => {
     const fetchAnalyticsData = async () => {
       try {
         if (!roomId || !startDate || !endDate) return;
         
+        console.log("Fetching analytics data for:", roomId);
+        console.log("Date range:", startDate, "to", endDate);
+        
         setLoading(true);
         setError(null);
         
-        // Get utilization stats
-        const stats = await getRoomUtilizationStats(roomId, startDate, endDate);
-        setUtilization(stats);
+        try {
+          // Get room utilization stats
+          console.log("Getting utilization stats...");
+          const stats = await getRoomUtilizationStats(roomId, startDate, endDate);
+          console.log("Received stats:", stats);
+          
+          // Set utilization data
+          setUtilization(stats);
+          
+          // If we don't have room data yet but stats has room details, use them
+          if (!room && stats.roomDetails) {
+            console.log("Setting room from stats:", stats.roomDetails);
+            setRoom(stats.roomDetails);
+          }
+          
+          // If room doesn't have a building but can be extracted from location
+          if (room && !room.building && room.location) {
+            const locationParts = room.location.split(',');
+            if (locationParts.length > 0) {
+              const buildingFromLocation = locationParts[0].trim();
+              // Create a new room object with the extracted building
+              const updatedRoom = {
+                ...room,
+                building: buildingFromLocation
+              };
+              setRoom(updatedRoom);
+            }
+          }
+          
+          // Process the reservations if provided in stats
+          if (stats.reservations && stats.reservations.length > 0) {
+            processReservationsData(stats.reservations);
+          } else {
+            // Fallback to separate query if reservations aren't included in stats
+            await fetchReservationsData();
+          }
+        } catch (statsError) {
+          console.error("Error getting room utilization:", statsError);
+          setError("Failed to load utilization data: " + statsError.message);
+          
+          // Try to fetch reservations separately if utilization stats failed
+          await fetchReservationsData();
+        }
+        
+        setLoading(false);
+      } catch (err) {
+        console.error("Error in fetchAnalyticsData:", err);
+        setError("Failed to load analytics data: " + err.message);
+        setLoading(false);
+      }
+    };
+    
+    // Helper function to fetch and process reservations separately
+    const fetchReservationsData = async () => {
+      try {
+        if (!roomId || !startDate || !endDate || !room) return;
         
         // Convert dates to timestamps for Firestore queries
         const startTimestamp = Timestamp.fromDate(startDate);
@@ -163,6 +225,16 @@ function RoomAnalytics({ roomId }) {
           ...doc.data()
         }));
         
+        // Process the reservations
+        processReservationsData(reservations);
+      } catch (err) {
+        console.error("Error fetching reservations data:", err);
+      }
+    };
+    
+    // Helper function to process reservations into stats
+    const processReservationsData = (reservations) => {
+      try {
         // Process daily stats
         const dailyData = {};
         
@@ -199,6 +271,8 @@ function RoomAnalytics({ roomId }) {
         
         // Process reservations
         for (const reservation of reservations) {
+          if (!reservation.startTime || !reservation.endTime) continue;
+          
           // Get reservation date and hour
           const resDate = reservation.startTime.toDate();
           const dateKey = format(resDate, 'yyyy-MM-dd');
@@ -264,6 +338,23 @@ function RoomAnalytics({ roomId }) {
           .sort((a, b) => b.bookingCount - a.bookingCount)
           .slice(0, 5); // Top 5 users
         
+        setDailyStats(sortedDailyStats);
+        setHourlyStats(hourlyData);
+        setUserStats(sortedUserStats);
+        setCapacityUtilization(avgCapacityUtilization);
+        
+        // Fetch recent reservations (not limited to date range)
+        fetchRecentReservations();
+      } catch (err) {
+        console.error("Error processing reservations data:", err);
+      }
+    };
+    
+    // Helper function to fetch recent reservations
+    const fetchRecentReservations = async () => {
+      try {
+        if (!roomId) return;
+        
         // Get recent reservations
         const recentQuery = query(
           collection(db, 'reservations'),
@@ -278,17 +369,9 @@ function RoomAnalytics({ roomId }) {
           ...doc.data()
         }));
         
-        setDailyStats(sortedDailyStats);
-        setHourlyStats(hourlyData);
-        setUserStats(sortedUserStats);
         setRecentReservations(recentReservationsData);
-        setCapacityUtilization(avgCapacityUtilization);
-        
-        setLoading(false);
       } catch (err) {
-        console.error("Error fetching analytics data:", err);
-        setError("Failed to load analytics data. Please try again.");
-        setLoading(false);
+        console.error("Error fetching recent reservations:", err);
       }
     };
     
@@ -339,11 +422,11 @@ function RoomAnalytics({ roomId }) {
       secondHalfHours += dailyStats[i].hours;
     }
     
-    const firstHalfAvg = firstHalfHours / middleIndex;
-    const secondHalfAvg = secondHalfHours / (dailyStats.length - middleIndex);
+    const firstHalfAvg = firstHalfHours / Math.max(1, middleIndex);
+    const secondHalfAvg = secondHalfHours / Math.max(1, dailyStats.length - middleIndex);
     
     // Calculate percentage change
-    const percentChange = ((secondHalfAvg - firstHalfAvg) / firstHalfAvg) * 100;
+    const percentChange = firstHalfAvg === 0 ? 0 : ((secondHalfAvg - firstHalfAvg) / firstHalfAvg) * 100;
     
     if (percentChange > 10) return "increasing";
     if (percentChange < -10) return "decreasing";
@@ -628,6 +711,7 @@ function RoomAnalytics({ roomId }) {
                       </TableHead>
                       <TableBody>
                         {recentReservations.map((reservation) => {
+                          if (!reservation.startTime || !reservation.endTime) return null;
                           // Calculate duration in hours
                           const startTime = reservation.startTime.seconds * 1000;
                           const endTime = reservation.endTime.seconds * 1000;

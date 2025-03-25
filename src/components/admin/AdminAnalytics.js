@@ -100,164 +100,176 @@ function AdminAnalytics() {
   // Fetch analytics data when date range changes
   useEffect(() => {
     const fetchAnalyticsData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Get all rooms
-        const rooms = await getRooms();
-        
-        // Convert dates to timestamps for Firestore queries
-        const startTimestamp = Timestamp.fromDate(startDate);
-        const endTimestamp = Timestamp.fromDate(endDate);
-        
-        // Query for reservations in the selected date range
-        const reservationsQuery = query(
-          collection(db, 'reservations'),
-          where('startTime', '>=', startTimestamp),
-          where('startTime', '<=', endTimestamp)
-        );
-        
-        const reservationsSnapshot = await getDocs(reservationsQuery);
-        const reservations = reservationsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        
-        setTotalBookings(reservations.length);
-        
-        // Calculate cancelled bookings
-        const cancelled = reservations.filter(r => r.status === 'cancelled').length;
-        setCancelledBookings(cancelled);
-        
-        // Process room utilization data
-        const roomStats = {};
-        const buildingStats = {};
-        const hourlyStats = Array(24).fill(0);
-        const dailyStats = Array(7).fill(0);
-        const userStats = {};
-        
-        reservations.forEach(reservation => {
-          // Skip cancelled reservations for some metrics
-          const isCancelled = reservation.status === 'cancelled';
+        try {
+          setLoading(true);
+          setError(null);
           
-          // Get room details
-          const room = rooms.find(r => r.id === reservation.roomId);
-          if (!room) return;
+          // Get all rooms
+          const rooms = await getRooms();
           
-          // Room utilization (count all reservations for total stats)
-          if (!roomStats[reservation.roomId]) {
-            roomStats[reservation.roomId] = {
-              id: reservation.roomId,
-              name: room.name,
-              type: room.type || 'Unknown',
-              building: room.building || 'Unknown',
-              capacity: room.capacity || 0,
-              bookingCount: 0,
-              activeBookings: 0,
-              cancelledBookings: 0,
-              hoursBooked: 0
-            };
-          }
+          // Convert dates to timestamps for Firestore queries
+          const startTimestamp = Timestamp.fromDate(startDate);
+          const endTimestamp = Timestamp.fromDate(endDate);
           
-          roomStats[reservation.roomId].bookingCount += 1;
+          // Query for reservations in the selected date range
+          const reservationsQuery = query(
+            collection(db, 'reservations'),
+            where('startTime', '>=', startTimestamp),
+            where('startTime', '<=', endTimestamp)
+          );
           
-          if (isCancelled) {
-            roomStats[reservation.roomId].cancelledBookings += 1;
-          } else {
-            roomStats[reservation.roomId].activeBookings += 1;
+          const reservationsSnapshot = await getDocs(reservationsQuery);
+          const reservations = reservationsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          
+          setTotalBookings(reservations.length);
+          
+          // Calculate cancelled bookings
+          const cancelled = reservations.filter(r => r.status === 'cancelled').length;
+          setCancelledBookings(cancelled);
+          
+          // Process room utilization data
+          const roomStats = {};
+          const buildingStats = {};
+          const hourlyStats = Array(24).fill(0);
+          const dailyStats = Array(7).fill(0);
+          const userStats = {};
+          
+          reservations.forEach(reservation => {
+            // Skip cancelled reservations for some metrics
+            const isCancelled = reservation.status === 'cancelled';
             
-            // Calculate hours booked (only for active bookings)
-            const startTime = reservation.startTime.toDate();
-            const endTime = reservation.endTime.toDate();
-            const hoursBooked = (endTime - startTime) / (1000 * 60 * 60);
-            roomStats[reservation.roomId].hoursBooked += hoursBooked;
+            // Get room details
+            const room = rooms.find(r => r.id === reservation.roomId);
+            if (!room) return;
             
-            // Building utilization
-            const building = room.building || 'Unknown';
-            if (!buildingStats[building]) {
-              buildingStats[building] = {
-                name: building,
+            // Extract building from room data
+            let building = 'Unknown';
+            if (room.building) {
+              building = room.building;
+            } else if (room.location) {
+              // Try to extract building from location (e.g., "Max Lowenthal Hall, Floor 1")
+              const locationParts = room.location.split(',');
+              if (locationParts.length > 0) {
+                building = locationParts[0].trim();
+              }
+            }
+            
+            // Room utilization (count all reservations for total stats)
+            if (!roomStats[reservation.roomId]) {
+              roomStats[reservation.roomId] = {
+                id: reservation.roomId,
+                name: room.name,
+                type: room.type || 'Unknown',
+                building: building, // Use the extracted building
+                capacity: room.capacity || 0,
                 bookingCount: 0,
+                activeBookings: 0,
+                cancelledBookings: 0,
                 hoursBooked: 0
               };
             }
-            buildingStats[building].bookingCount += 1;
-            buildingStats[building].hoursBooked += hoursBooked;
             
-            // Hourly distribution
-            const hour = startTime.getHours();
-            hourlyStats[hour] += 1;
+            roomStats[reservation.roomId].bookingCount += 1;
             
-            // Daily distribution
-            const day = startTime.getDay();
-            dailyStats[day] += 1;
-          }
-          
-          // User bookings (count all for user stats)
-          if (!userStats[reservation.userId]) {
-            userStats[reservation.userId] = {
-              id: reservation.userId,
-              email: reservation.userEmail || reservation.userId,
-              bookingCount: 0,
-              activeBookings: 0,
-              cancelledBookings: 0,
-              hoursBooked: 0
-            };
-          }
-          
-          userStats[reservation.userId].bookingCount += 1;
-          
-          if (isCancelled) {
-            userStats[reservation.userId].cancelledBookings += 1;
-          } else {
-            userStats[reservation.userId].activeBookings += 1;
+            if (isCancelled) {
+              roomStats[reservation.roomId].cancelledBookings += 1;
+            } else {
+              roomStats[reservation.roomId].activeBookings += 1;
+              
+              // Calculate hours booked (only for active bookings)
+              const startTime = reservation.startTime.toDate();
+              const endTime = reservation.endTime.toDate();
+              const hoursBooked = (endTime - startTime) / (1000 * 60 * 60);
+              roomStats[reservation.roomId].hoursBooked += hoursBooked;
+              
+              // Building utilization
+              if (!buildingStats[building]) {
+                buildingStats[building] = {
+                  name: building,
+                  bookingCount: 0,
+                  hoursBooked: 0
+                };
+              }
+              buildingStats[building].bookingCount += 1;
+              buildingStats[building].hoursBooked += hoursBooked;
+              
+              // Hourly distribution
+              const hour = startTime.getHours();
+              hourlyStats[hour] += 1;
+              
+              // Daily distribution
+              const day = startTime.getDay();
+              dailyStats[day] += 1;
+            }
             
-            // Calculate hours (only for active bookings)
-            const startTime = reservation.startTime.toDate();
-            const endTime = reservation.endTime.toDate();
-            const hoursBooked = (endTime - startTime) / (1000 * 60 * 60);
-            userStats[reservation.userId].hoursBooked += hoursBooked;
-          }
-        });
-        
-        // Convert to arrays for charts
-        const roomUtilizationData = Object.values(roomStats)
-          .sort((a, b) => b.bookingCount - a.bookingCount)
-          .slice(0, 10); // Top 10 rooms
-        
-        const buildingUtilizationData = Object.values(buildingStats)
-          .sort((a, b) => b.bookingCount - a.bookingCount);
-        
-        const hourlyDistributionData = hourlyStats.map((count, hour) => ({
-          hour: `${hour}:00`,
-          count
-        }));
-        
-        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const dailyDistributionData = dailyStats.map((count, day) => ({
-          day: dayNames[day],
-          count
-        }));
-        
-        const userBookingsData = Object.values(userStats)
-          .sort((a, b) => b.bookingCount - a.bookingCount)
-          .slice(0, 10); // Top 10 users
-        
-        // Update state with processed data
-        setReservationsData(reservations);
-        setRoomUtilization(roomUtilizationData);
-        setBuildingUtilization(buildingUtilizationData);
-        setHourlyDistribution(hourlyDistributionData);
-        setDailyDistribution(dailyDistributionData);
-        setUserBookings(userBookingsData);
-        
-        setLoading(false);
-      } catch (err) {
-        console.error("Error fetching analytics data:", err);
-        setError("Failed to load analytics data. Please try again.");
-        setLoading(false);
-      }
+            // User bookings (count all for user stats)
+            if (!userStats[reservation.userId]) {
+              userStats[reservation.userId] = {
+                id: reservation.userId,
+                email: reservation.userEmail || reservation.userId,
+                bookingCount: 0,
+                activeBookings: 0,
+                cancelledBookings: 0,
+                hoursBooked: 0
+              };
+            }
+            
+            userStats[reservation.userId].bookingCount += 1;
+            
+            if (isCancelled) {
+              userStats[reservation.userId].cancelledBookings += 1;
+            } else {
+              userStats[reservation.userId].activeBookings += 1;
+              
+              // Calculate hours (only for active bookings)
+              const startTime = reservation.startTime.toDate();
+              const endTime = reservation.endTime.toDate();
+              const hoursBooked = (endTime - startTime) / (1000 * 60 * 60);
+              userStats[reservation.userId].hoursBooked += hoursBooked;
+            }
+          });
+          
+          // Convert to arrays for charts
+          const roomUtilizationData = Object.values(roomStats)
+            .sort((a, b) => b.bookingCount - a.bookingCount)
+            .slice(0, 10); // Top 10 rooms
+          
+          const buildingUtilizationData = Object.values(buildingStats)
+            .sort((a, b) => b.bookingCount - a.bookingCount);
+          
+          const hourlyDistributionData = hourlyStats.map((count, hour) => ({
+            hour: `${hour}:00`,
+            count
+          }));
+          
+          const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+          const dailyDistributionData = dailyStats.map((count, day) => ({
+            day: dayNames[day],
+            count
+          }));
+          
+          const userBookingsData = Object.values(userStats)
+            .sort((a, b) => b.bookingCount - a.bookingCount)
+            .slice(0, 10); // Top 10 users
+          
+          // Update state with processed data
+          setReservationsData(reservations);
+          setRoomUtilization(roomUtilizationData);
+          setBuildingUtilization(buildingUtilizationData);
+          setHourlyDistribution(hourlyDistributionData);
+          setDailyDistribution(dailyDistributionData);
+          setUserBookings(userBookingsData);
+          
+          setLoading(false);
+        } catch (err) {
+          console.error("Error fetching analytics data:", err);
+          setError("Failed to load analytics data. Please try again.");
+          setLoading(false);
+        }
+      
     };
     
     fetchAnalyticsData();
