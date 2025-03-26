@@ -1,23 +1,20 @@
-// src/components/rooms/PDFRenderer.js
+// src/components/rooms/PDFViewer.js - A dedicated component for rendering PDFs with interactive overlays
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, CircularProgress, Typography, Alert } from '@mui/material';
 import * as pdfjs from 'pdfjs-dist';
 
-// Configure PDF.js worker
-// Note: In a real implementation, you'd need to include the PDF.js worker file
-// and provide the workerSrc. For this implementation, we'll assume it's already set up.
-if (typeof window !== 'undefined' && 'pdfjs' in window) {
-  pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
-}
+// Set worker path
+const pdfjsWorker = process.env.PUBLIC_URL + '/pdf.worker.min.js';
+pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
-const PDFRenderer = ({ file, scale = 1, onRenderComplete }) => {
+const PDFViewer = ({ pdfPath, scale = 1, onRenderComplete, roomOverlays = [], onRoomClick }) => {
   const canvasRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
-    if (!file) {
+    if (!pdfPath) {
       setError("No PDF file provided");
       setLoading(false);
       return;
@@ -33,7 +30,7 @@ const PDFRenderer = ({ file, scale = 1, onRenderComplete }) => {
         setError(null);
 
         // Load the PDF
-        const loadingTask = pdfjs.getDocument(file);
+        const loadingTask = pdfjs.getDocument(pdfPath);
         pdfDocument = await loadingTask.promise;
 
         if (!isMounted) return;
@@ -101,50 +98,46 @@ const PDFRenderer = ({ file, scale = 1, onRenderComplete }) => {
         pdfDocument.destroy();
       }
     };
-  }, [file, scale, onRenderComplete]);
+  }, [pdfPath, scale, onRenderComplete]);
 
-  // Handle image fallback for development/testing
+  // Handle fallback to image if needed
   const handleImageFallback = () => {
-    if (!file) return;
+    if (!pdfPath) return;
     
-    // If the file is a URL to a PDF but we can't render it with PDF.js,
-    // try to display it as an image (for development/testing convenience)
-    if (file.endsWith('.pdf')) {
-      const imagePath = file.replace('.pdf', '.png');
-      
-      const img = new Image();
-      img.onload = () => {
-        if (canvasRef.current) {
-          const context = canvasRef.current.getContext('2d');
-          canvasRef.current.width = img.width;
-          canvasRef.current.height = img.height;
-          context.drawImage(img, 0, 0);
-          
-          setDimensions({
+    // Try to use a PNG version of the floor plan instead
+    const imagePath = pdfPath.replace('.pdf', '.png');
+    
+    const img = new Image();
+    img.onload = () => {
+      if (canvasRef.current) {
+        const context = canvasRef.current.getContext('2d');
+        canvasRef.current.width = img.width;
+        canvasRef.current.height = img.height;
+        context.drawImage(img, 0, 0);
+        
+        setDimensions({
+          width: img.width * scale,
+          height: img.height * scale
+        });
+        
+        setLoading(false);
+        setError(null);
+        
+        if (onRenderComplete) {
+          onRenderComplete({
             width: img.width * scale,
             height: img.height * scale
           });
-          
-          setLoading(false);
-          setError(null);
-          
-          // Notify parent that rendering is complete
-          if (onRenderComplete) {
-            onRenderComplete({
-              width: img.width * scale,
-              height: img.height * scale
-            });
-          }
         }
-      };
-      
-      img.onerror = () => {
-        setError("Could not load PDF or image fallback");
-        setLoading(false);
-      };
-      
-      img.src = imagePath;
-    }
+      }
+    };
+    
+    img.onerror = () => {
+      setError("Could not load PDF or image fallback");
+      setLoading(false);
+    };
+    
+    img.src = imagePath;
   };
 
   return (
@@ -155,6 +148,7 @@ const PDFRenderer = ({ file, scale = 1, onRenderComplete }) => {
         height: '100%'
       }}
     >
+      {/* Loading indicator */}
       {loading && (
         <Box 
           sx={{ 
@@ -176,6 +170,7 @@ const PDFRenderer = ({ file, scale = 1, onRenderComplete }) => {
         </Box>
       )}
       
+      {/* Error message */}
       {error && (
         <Box 
           sx={{ 
@@ -193,18 +188,20 @@ const PDFRenderer = ({ file, scale = 1, onRenderComplete }) => {
         >
           <Alert severity="error" sx={{ width: '100%' }}>
             {error}
-            <Button 
-              variant="text" 
-              size="small" 
-              onClick={handleImageFallback}
-              sx={{ mt: 1 }}
-            >
-              Try image fallback
-            </Button>
+            <Box sx={{ mt: 1 }}>
+              <Button 
+                variant="text" 
+                size="small" 
+                onClick={handleImageFallback}
+              >
+                Try image fallback
+              </Button>
+            </Box>
           </Alert>
         </Box>
       )}
       
+      {/* PDF Canvas */}
       <canvas 
         ref={canvasRef} 
         style={{ 
@@ -212,8 +209,45 @@ const PDFRenderer = ({ file, scale = 1, onRenderComplete }) => {
           height: dimensions.height ? dimensions.height : '100%'
         }}
       />
+      
+      {/* Room overlay elements */}
+      {!loading && !error && roomOverlays.map((overlay, index) => (
+        <Box
+          key={`room-${overlay.id || index}`}
+          sx={{
+            position: 'absolute',
+            left: overlay.x,
+            top: overlay.y,
+            width: overlay.width,
+            height: overlay.height,
+            backgroundColor: overlay.isOccupied ? 
+              'rgba(244, 67, 54, 0.7)' : 'rgba(76, 175, 80, 0.7)',
+            border: '2px solid rgba(0, 0, 0, 0.3)',
+            borderRadius: '5px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '10px',
+            color: 'white',
+            textShadow: '0 0 2px black',
+            fontWeight: 'bold',
+            overflow: 'hidden',
+            transition: 'all 0.2s ease-in-out',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+            '&:hover': {
+              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              transform: 'translateY(-1px)',
+              zIndex: 2
+            }
+          }}
+          onClick={() => onRoomClick && onRoomClick(overlay)}
+        >
+          {overlay.width > 60 && overlay.height > 20 ? overlay.label : ''}
+        </Box>
+      ))}
     </Box>
   );
 };
 
-export default PDFRenderer;
+export default PDFViewer;

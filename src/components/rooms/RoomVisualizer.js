@@ -23,10 +23,18 @@ import {
   CardActions,
   Chip,
   useTheme,
-  useMediaQuery
+  useMediaQuery,
+  Alert
 } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { getRooms, getRoomReservations, getRoom } from '../../services/roomService';
+import { MAP_CONFIG } from '../../services/mapService';
+import * as pdfjs from 'pdfjs-dist';
+
+// Configure PDF.js worker
+if (typeof window !== 'undefined' && 'pdfjs' in window) {
+  pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+}
 
 // Icons
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
@@ -39,24 +47,9 @@ import CloseIcon from '@mui/icons-material/Close';
 import MeetingRoomIcon from '@mui/icons-material/MeetingRoom';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
-
-// Building floor plans
-const floorPlans = {
-  "Max Lowenthal Hall": {
-    "1st Floor": "/images/floor-plans/12-MAX-LOWENTHAL-HALL-1ST-FLOOR.pdf",
-    "2nd Floor": "/images/floor-plans/12-MAX-LOWENTHAL-HALL-2ND-FLOOR.pdf",
-    "3rd Floor": "/images/floor-plans/12-MAX-LOWENTHAL-HALL-3RD-FLOOR.pdf",
-    "4th Floor": "/images/floor-plans/12-MAX-LOWENTHAL-HALL-4TH-FLOOR.pdf",
-    "A-Level": "/images/floor-plans/12-MAX-LOWENTHAL-HALL-A-LEVEL.pdf"
-  },
-  "Wallace Library": {
-    "1st Floor": "/images/floor-plans/05-WALLACE-LIBRARY-1ST-FLOOR.pdf",
-    "2nd Floor": "/images/floor-plans/05-WALLACE-LIBRARY-2ND-FLOOR.pdf",
-    "3rd Floor": "/images/floor-plans/05-WALLACE-LIBRARY-3RD-FLOOR.pdf",
-    "4th Floor": "/images/floor-plans/05-WALLACE-LIBRARY-4TH-FLOOR.pdf",
-    "A-Level": "/images/floor-plans/05-WALLACE-LIBRARY-A-LEVEL.pdf"
-  }
-};
+import ComputerIcon from '@mui/icons-material/Computer';
+import VideoCallIcon from '@mui/icons-material/VideoCall';
+import DesktopWindowsIcon from '@mui/icons-material/DesktopWindows';
 
 // Room overlay data - pre-defined coordinates for rooms on each floor
 // These would be dynamically generated in a production environment
@@ -140,11 +133,11 @@ const findRoomAtCoordinates = (building, floor, x, y) => {
   return null;
 };
 
-// Main component
 function RoomVisualizer() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const mapRef = useRef(null);
+  const canvasRef = useRef(null);
   
   // State for UI controls
   const [building, setBuilding] = useState("Max Lowenthal Hall");
@@ -157,12 +150,16 @@ function RoomVisualizer() {
   const [rooms, setRooms] = useState([]);
   const [reservations, setReservations] = useState({});
   const [loading, setLoading] = useState(true);
+  const [pdfLoading, setPdfLoading] = useState(true);
   const [error, setError] = useState(null);
   
   // Room info drawer
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [roomDetails, setRoomDetails] = useState(null);
+  
+  // PDF State
+  const [pdfDimensions, setPdfDimensions] = useState({ width: 0, height: 0 });
   
   // Fetch all rooms
   useEffect(() => {
@@ -403,6 +400,51 @@ function RoomVisualizer() {
     return roomData ? roomData.id : null;
   };
   
+  // Format time for display
+  const formatTime = (timestamp) => {
+    if (!timestamp || !timestamp.seconds) return 'N/A';
+    const date = new Date(timestamp.seconds * 1000);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+  
+  // Format date for display
+  const formatDate = (timestamp) => {
+    if (!timestamp || !timestamp.seconds) return 'N/A';
+    const date = new Date(timestamp.seconds * 1000);
+    return date.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+  };
+  
+  // Get equipment icons
+  const getEquipmentIcons = (equipment = []) => {
+    const icons = [];
+    
+    if (equipment.includes('Computer')) {
+      icons.push(
+        <Tooltip key="computer" title="Computer">
+          <ComputerIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} />
+        </Tooltip>
+      );
+    }
+    
+    if (equipment.includes('Video Conference') || equipment.includes('Video Conferencing')) {
+      icons.push(
+        <Tooltip key="video" title="Video Conferencing">
+          <VideoCallIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} />
+        </Tooltip>
+      );
+    }
+    
+    if (equipment.includes('Smart Board') || equipment.includes('Projector') || equipment.includes('TV Screen')) {
+      icons.push(
+        <Tooltip key="display" title="Display">
+          <DesktopWindowsIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} />
+        </Tooltip>
+      );
+    }
+    
+    return icons;
+  };
+  
   // Render room rectangles
   const renderRooms = () => {
     if (!roomOverlays[building] || !roomOverlays[building][floor]) {
@@ -455,29 +497,93 @@ function RoomVisualizer() {
       );
     });
   };
-  
-  // Format time for display
-  const formatTime = (timestamp) => {
-    if (!timestamp || !timestamp.seconds) return 'N/A';
-    const date = new Date(timestamp.seconds * 1000);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-  
-  // Format date for display
-  const formatDate = (timestamp) => {
-    if (!timestamp || !timestamp.seconds) return 'N/A';
-    const date = new Date(timestamp.seconds * 1000);
-    return date.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
-  };
-  
+
+  // PDF Loading Function
+  useEffect(() => {
+    let isMounted = true;
+    let renderTask = null;
+    let pdfDocument = null;
+
+    const renderPDF = async () => {
+      // Skip if we don't have a canvas reference yet
+      if (!canvasRef.current) return;
+      
+      try {
+        setPdfLoading(true);
+        
+        // Get the floor plan path
+        const pdfPath = floorPlans[building][floor];
+        
+        if (!pdfPath) {
+          throw new Error("Floor plan not found");
+        }
+        
+        // Load the PDF
+        const loadingTask = pdfjs.getDocument(pdfPath);
+        pdfDocument = await loadingTask.promise;
+        
+        if (!isMounted) return;
+        
+        // Get the first page
+        const page = await pdfDocument.getPage(1);
+        if (!isMounted) return;
+        
+        // Get viewport for rendering
+        const viewport = page.getViewport({ scale: 1 });
+        const canvas = canvasRef.current;
+        
+        // Set canvas dimensions to match viewport
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        
+        setPdfDimensions({
+          width: viewport.width, 
+          height: viewport.height
+        });
+        
+        // Render the PDF page to the canvas
+        const context = canvas.getContext('2d');
+        renderTask = page.render({
+          canvasContext: context,
+          viewport
+        });
+        
+        await renderTask.promise;
+        
+        if (!isMounted) return;
+        
+        setPdfLoading(false);
+      } catch (err) {
+        console.error("Error rendering PDF:", err);
+        if (isMounted) {
+          setError(`Failed to render floor plan: ${err.message}`);
+          setPdfLoading(false);
+        }
+      }
+    };
+    
+    renderPDF();
+    
+    // Cleanup function
+    return () => {
+      isMounted = false;
+      if (renderTask) {
+        renderTask.cancel();
+      }
+      if (pdfDocument) {
+        pdfDocument.destroy();
+      }
+    };
+  }, [building, floor]);
+
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
         <CircularProgress />
       </Box>
     );
   }
-  
+
   return (
     <Paper sx={{ p: 3 }}>
       <Typography variant="h5" sx={{ mb: 3 }}>
@@ -485,9 +591,9 @@ function RoomVisualizer() {
       </Typography>
       
       {error && (
-        <Typography color="error" sx={{ mb: 2 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
           {error}
-        </Typography>
+        </Alert>
       )}
       
       <Box sx={{ mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
@@ -631,15 +737,28 @@ function RoomVisualizer() {
             transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
             transformOrigin: '0 0',
             width: '100%',
-            height: '100%',
-            backgroundImage: `url(${floorPlans[building][floor]})`,
-            backgroundSize: 'contain',
-            backgroundRepeat: 'no-repeat',
-            backgroundPosition: 'center',
+            height: '100%'
           }}
         >
-          {/* Room Overlays */}
-          {renderRooms()}
+          {pdfLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+              <CircularProgress sx={{ mr: 2 }} />
+              <Typography>Loading floor plan...</Typography>
+            </Box>
+          ) : (
+            <>
+              <canvas 
+                ref={canvasRef}
+                style={{ 
+                  maxWidth: '100%', 
+                  maxHeight: '100%',
+                  display: 'block'
+                }}
+              />
+              {/* Room Overlays */}
+              {renderRooms()}
+            </>
+          )}
         </Box>
       </Box>
       
@@ -790,5 +909,23 @@ function RoomVisualizer() {
     </Paper>
   );
 }
+
+// Floor plan paths
+const floorPlans = {
+  "Max Lowenthal Hall": {
+    "1st Floor": "/images/floor-plans/12-MAX-LOWENTHAL-HALL-1ST-FLOOR.pdf",
+    "2nd Floor": "/images/floor-plans/12-MAX-LOWENTHAL-HALL-2ND-FLOOR.pdf",
+    "3rd Floor": "/images/floor-plans/12-MAX-LOWENTHAL-HALL-3RD-FLOOR.pdf",
+    "4th Floor": "/images/floor-plans/12-MAX-LOWENTHAL-HALL-4TH-FLOOR.pdf",
+    "A-Level": "/images/floor-plans/12-MAX-LOWENTHAL-HALL-A-LEVEL.pdf"
+  },
+  "Wallace Library": {
+    "1st Floor": "/images/floor-plans/05-WALLACE-LIBRARY-1ST-FLOOR.pdf",
+    "2nd Floor": "/images/floor-plans/05-WALLACE-LIBRARY-2ND-FLOOR.pdf",
+    "3rd Floor": "/images/floor-plans/05-WALLACE-LIBRARY-3RD-FLOOR.pdf",
+    "4th Floor": "/images/floor-plans/05-WALLACE-LIBRARY-4TH-FLOOR.pdf",
+    "A-Level": "/images/floor-plans/05-WALLACE-LIBRARY-A-LEVEL.pdf"
+  }
+};
 
 export default RoomVisualizer;
