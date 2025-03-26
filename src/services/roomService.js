@@ -288,15 +288,19 @@ export const getRoomReservations = async (roomId) => {
 export const getUserDailyBookings = async (userId, startDate, endDate) => {
   try {
     // Ensure we have proper Date objects
-    const startDay = new Date(startDate);
-    startDay.setHours(0, 0, 0, 0); // Start of the day
-    
-    const endDay = new Date(endDate);
-    endDay.setHours(23, 59, 59, 999); // End of the day
+    const startDay = new Date();
+    startDay.setHours(0, 0, 0, 0); // Start of today
+        
+    const endDay = new Date();
+    endDay.setHours(23, 59, 59, 999); // End of today
     
     const startTimestamp = Timestamp.fromDate(startDay);
     const endTimestamp = Timestamp.fromDate(endDay);
     const now = Timestamp.now();
+    const userAllowanceRef = doc(db, 'userAllowances', userId);
+    const userAllowanceSnap = await getDoc(userAllowanceRef);
+    const dailyLimit = userAllowanceSnap.exists() ? 
+    userAllowanceSnap.data().dailyHours : 
     
     console.log(`Getting bookings for ${userId} from ${startDay.toLocaleString()} to ${endDay.toLocaleString()}`);
     
@@ -378,8 +382,9 @@ export const getUserDailyBookings = async (userId, startDate, endDate) => {
     console.log(`Total hours booked for today: ${totalHoursBooked.toFixed(2)}`);
     
     return {
-      bookings: bookingsWithHours,
-      totalHoursBooked
+      bookings: bookingsWithRooms,
+      totalHoursBooked,
+      dailyLimit
     };
   } catch (error) {
     console.error("Error getting user daily bookings:", error);

@@ -35,6 +35,8 @@ import WarningIcon from '@mui/icons-material/Warning';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PeopleIcon from '@mui/icons-material/People';
 import EventIcon from '@mui/icons-material/Event';
+import HourRequestsManager from '../components/admin/HourRequestsManager';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 
 function AdminPage() {
   const { currentUser } = useAuth();
@@ -341,6 +343,15 @@ function AdminPage() {
               } 
               id="tab-3" 
             />
+            <Tab 
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <AccessTimeIcon sx={{ mr: 1 }} fontSize="small" />
+                Hour Requests
+              </Box>
+            } 
+            id="tab-4" 
+          />
           </Tabs>
         </Box>
         
@@ -356,7 +367,9 @@ function AdminPage() {
         <Box role="tabpanel" hidden={activeTab !== 2}>
           {activeTab === 2 && <AdminRoomLoader />}
         </Box>
-        
+        <Box role="tabpanel" hidden={activeTab !== 4}>
+          {activeTab === 4 && <HourRequestsManager />}
+        </Box>
         <Box role="tabpanel" hidden={activeTab !== 3}>
           {activeTab === 3 && (
             <Paper sx={{ p: 3 }}>

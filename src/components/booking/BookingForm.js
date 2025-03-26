@@ -19,14 +19,21 @@ import {
   CircularProgress,
   Tooltip,
   LinearProgress,
-  useTheme
+  useTheme,
+  Chip  
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { useAuth } from '../../contexts/AuthContext';
-import { getRoom, createReservation, checkRoomAvailability, getUserDailyBookings } from '../../services/roomService';
+
 import { addHours, setMinutes, setSeconds, setMilliseconds, format } from 'date-fns';
+import { 
+  getRoom, 
+  createReservation, 
+  checkRoomAvailability, 
+  getUserDailyBookings 
+} from '../../services/roomService';
 
 // Icons - you can add these if you want to enhance the UI further
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
@@ -58,6 +65,7 @@ function BookingForm() {
   const [dailyBookingHours, setDailyBookingHours] = useState(0);
   const [hoursRemaining, setHoursRemaining] = useState(5);
   const [todayBookings, setTodayBookings] = useState([]);
+  const [dailyLimit, setDailyLimit] = useState(5); // Add this state for custom limit
   
   // Function to round time to the nearest hour
   function roundToHour(date) {
@@ -83,11 +91,19 @@ function BookingForm() {
   }, [location]);
   
   // Fetch room details and user's daily bookings
+// Fetch room details and user's daily bookings
   useEffect(() => {
     const fetchRoomAndUserData = async () => {
       try {
         setLoading(true);
         setError(null);
+        
+        // Create today and tomorrow date objects first
+        const todayDate = new Date();
+        todayDate.setHours(0, 0, 0, 0);
+        
+        const tomorrowDate = new Date(todayDate);
+        tomorrowDate.setDate(tomorrowDate.getDate() + 1);
         
         // Fetch room data
         const roomData = await getRoom(id);
@@ -101,21 +117,25 @@ function BookingForm() {
         
         // Fetch user's daily bookings if user is logged in
         if (currentUser) {
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          
-          const tomorrow = new Date(today);
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          
           try {
-            const result = await getUserDailyBookings(currentUser.uid, today, tomorrow);
+            const result = await getUserDailyBookings(currentUser.uid, todayDate, tomorrowDate);
+            
+            const customDailyLimit = result.dailyLimit || 5;
+            setDailyLimit(customDailyLimit); // Store the custom limit in state
             
             // Set daily booking info
             setTodayBookings(result.bookings || []);
             setDailyBookingHours(result.totalHoursBooked || 0);
             
+            // Check against custom limit
+            if (duration > customDailyLimit) {
+              setError(`You can only book up to ${customDailyLimit} hours per day.`);
+              setLoading(false);
+              return;
+            }
+            
             // Calculate remaining hours, ensuring it's not negative
-            const remaining = Math.max(0, 5 - result.totalHoursBooked);
+            const remaining = Math.max(0, customDailyLimit - result.totalHoursBooked);
             setHoursRemaining(remaining);
             
             // If the current selected duration is greater than remaining hours,
@@ -141,8 +161,8 @@ function BookingForm() {
       }
     };
 
-    fetchRoomAndUserData();
-  }, [id, currentUser]);
+  fetchRoomAndUserData();
+}, [id, currentUser, duration]);
 
   // Update end time when start time or duration changes
   useEffect(() => {
@@ -189,16 +209,25 @@ function BookingForm() {
   // Daily Booking Display Component
   const DailyBookingDisplay = () => {
     // Calculate percentage of daily limit used
-    const percentUsed = (dailyBookingHours / 5) * 100;
+    const percentUsed = (dailyBookingHours / dailyLimit) * 100;
     
     return (
       <Box sx={{ mt: 1, mb: 2 }}>
         <Typography variant="subtitle2" gutterBottom>
-          Daily Booking Limit (5 hours)
+          Daily Booking Limit ({dailyLimit} hours)
+          {dailyLimit > 5 && (
+            <Chip 
+              label="Extended" 
+              size="small" 
+              color="success" 
+              variant="outlined"
+              sx={{ ml: 1, height: 20 }}
+            />
+          )}
         </Typography>
         
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-          <Tooltip title={`${dailyBookingHours.toFixed(1)} hours used out of 5 hour daily limit`}>
+          <Tooltip title={`${dailyBookingHours.toFixed(1)} hours used out of ${dailyLimit} hour daily limit`}>
             <Box sx={{ flexGrow: 1, mr: 1 }}>
               <LinearProgress 
                 variant="determinate" 
@@ -209,7 +238,7 @@ function BookingForm() {
             </Box>
           </Tooltip>
           <Typography variant="body2" color="textSecondary">
-            {dailyBookingHours.toFixed(1)}/5 hrs
+            {dailyBookingHours.toFixed(1)}/{dailyLimit} hrs
           </Typography>
         </Box>
         
@@ -219,27 +248,15 @@ function BookingForm() {
           sx={{ fontWeight: hoursRemaining < 1 ? 'bold' : 'normal' }}
         >
           {hoursRemaining < 1 
-            ? "You've reached your daily booking limit" 
+            ? "You've reached your daily booking limit. Need more? Request additional hours." 
             : `You can book ${hoursRemaining.toFixed(1)} more hours today`}
         </Typography>
         
-        {todayBookings.length > 0 && (
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="caption" color="textSecondary">
-              Your bookings today:
-            </Typography>
-            {todayBookings.map((booking, index) => (
-              <Typography key={index} variant="caption" component="div" color="textSecondary">
-                • {booking.room?.name || 'Room'}: {format(new Date(booking.startTime.seconds * 1000), 'h:mm a')} - 
-                {format(new Date(booking.endTime.seconds * 1000), 'h:mm a')}
-                {' '}({booking.durationHours.toFixed(1)} hrs)
-              </Typography>
-            ))}
-          </Box>
-        )}
+        {/* Rest of your existing component... */}
       </Box>
     );
   };
+  
 
   // Form submission handler
   const handleSubmit = async (e) => {
@@ -256,28 +273,31 @@ function BookingForm() {
       return;
     }
     
-    // Check if user has exceeded daily limit
-    if (dailyBookingHours + duration > 5) {
-      setError(`You can only book up to 5 hours per day. You already have ${dailyBookingHours.toFixed(1)} hours booked.`);
-      return;
-    }
-    
-    // Check if duration is valid (at least 1 hour)
-    if (duration < 1) {
-      setError("Booking duration must be at least 1 hour");
-      return;
-    }
-    
-    // Check if start time is in the past
-    if (startTime < new Date()) {
-      setError("Cannot book a room in the past");
-      return;
-    }
-    
     try {
       setSubmitting(true);
       setError(null);
       
+      // Define date variables here so they're in scope
+      const currentDate = new Date();
+      const todayDate = new Date(currentDate);
+      todayDate.setHours(0, 0, 0, 0);
+      
+      const tomorrowDate = new Date(todayDate);
+      tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+      
+      // Get user's daily bookings with custom allowance
+      const userDailyData = await getUserDailyBookings(currentUser.uid, todayDate, tomorrowDate);
+      const customDailyLimit = userDailyData.dailyLimit || 5;
+      const currentDailyUsage = userDailyData.totalHoursBooked || 0;
+      
+      // Check if user has exceeded their daily limit (custom or default)
+      if (currentDailyUsage + duration > customDailyLimit) {
+        setError(`You can only book up to ${customDailyLimit} hours per day. You already have ${currentDailyUsage.toFixed(1)} hours booked.`);
+        setSubmitting(false);
+        return;
+      }
+      
+      // Proceed with room availability check
       console.log("Checking room availability...");
       
       // Check if room is available for the selected time period
@@ -288,6 +308,8 @@ function BookingForm() {
         setSubmitting(false);
         return;
       }
+  
+      // Continue with the rest of your existing code...
       
       console.log("Room is available, creating reservation...");
       
@@ -407,7 +429,7 @@ function BookingForm() {
                   
                   {dailyBookingHours >= 5 && (
                     <Alert severity="warning" sx={{ mt: 1 }}>
-                      You've reached your daily booking limit of 5 hours. You cannot make any more bookings today.
+                      You've reached your daily booking limit of {dailyLimit}  hours. You cannot make any more bookings today.
                     </Alert>
                   )}
                 </Paper>

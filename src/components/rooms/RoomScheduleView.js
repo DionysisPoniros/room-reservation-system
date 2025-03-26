@@ -142,6 +142,11 @@ const isRoomBooked = (roomId, timeSlot) => {
     }
   };
   
+const isTimeSlotInPast = (timeSlot) => {
+  const slotTime = new Date(timeSlot);
+  const now = new Date();
+  return slotTime < now;
+};
   // Get equipment icons
   const getEquipmentIcons = (equipment = []) => {
     const icons = [];
@@ -323,18 +328,32 @@ const isRoomBooked = (roomId, timeSlot) => {
                 
                 {timeSlots.map((timeSlot) => {
                   const isBooked = isRoomBooked(room.id, timeSlot);
+                  const isPast = new Date(timeSlot) < new Date(); // Check if time slot is in the past
                   
                   return (
                     <TableCell 
                       key={`${room.id}-${timeSlot}`} 
                       align="center"
                       sx={{ 
-                        bgcolor: isBooked ? 'rgba(244, 67, 54, 0.1)' : 'rgba(76, 175, 80, 0.1)',
+                        bgcolor: isPast ? 'rgba(0, 0, 0, 0.1)' : // Gray for past times
+                                isBooked ? 'rgba(244, 67, 54, 0.1)' : // Red tint for booked
+                                'rgba(76, 175, 80, 0.1)', // Green tint for available
                         borderRight: '1px solid #f0f0f0',
                         p: 0.75 // Reduced padding for more compact view
                       }}
                     >
-                      {isBooked ? (
+                      {isPast ? (
+                        <Chip 
+                          label="Past" 
+                          size="small" 
+                          color="default"
+                          sx={{ 
+                            height: 20, 
+                            fontSize: '0.65rem',
+                            opacity: 0.7
+                          }} 
+                        />
+                      ) : isBooked ? (
                         <Chip 
                           label="Booked" 
                           size="small" 
@@ -370,7 +389,7 @@ const isRoomBooked = (roomId, timeSlot) => {
         </Table>
       </TableContainer>
       
-      {/* Legend */}
+      {/* Legend - Updated to include Past */}
       <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <Box sx={{ width: 16, height: 16, bgcolor: 'rgba(76, 175, 80, 0.1)', border: '1px solid #ccc', mr: 1 }}></Box>
@@ -379,6 +398,10 @@ const isRoomBooked = (roomId, timeSlot) => {
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <Box sx={{ width: 16, height: 16, bgcolor: 'rgba(244, 67, 54, 0.1)', border: '1px solid #ccc', mr: 1 }}></Box>
           <Typography variant="body2">Booked</Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box sx={{ width: 16, height: 16, bgcolor: 'rgba(0, 0, 0, 0.1)', border: '1px solid #ccc', mr: 1 }}></Box>
+          <Typography variant="body2">Past</Typography>
         </Box>
       </Box>
     </Paper>

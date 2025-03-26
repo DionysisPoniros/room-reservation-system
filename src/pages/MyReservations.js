@@ -36,6 +36,8 @@ import GroupIcon from '@mui/icons-material/Group';
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import CancelIcon from '@mui/icons-material/Cancel';
 import AddIcon from '@mui/icons-material/Add';
+import RequestHoursForm from '../components/booking/RequestHoursForm';
+import { getUserHourRequests, getUserHourAllowance } from '../services/userService';
 
 function MyReservations() {
   const { currentUser } = useAuth();
@@ -57,6 +59,12 @@ function MyReservations() {
   // UI state
   const [activeTab, setActiveTab] = useState(0);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  //HoursRequest
+  const [requestFormOpen, setRequestFormOpen] = useState(false);
+  const [hourRequests, setHourRequests] = useState([]);
+  const [dailyLimit, setDailyLimit] = useState(5);
+  const [loadingRequests, setLoadingRequests] = useState(false);
 
   useEffect(() => {
     if (!currentUser) {
@@ -93,16 +101,27 @@ function MyReservations() {
         tomorrow.setDate(tomorrow.getDate() + 1);
         
         // Get today's bookings and calculate daily limit
+
         const result = await getUserDailyBookings(currentUser.uid, today, tomorrow);
         setTodayBookings(result.bookings || []);
         setDailyHoursUsed(result.totalHoursBooked || 0);
-        setDailyHoursRemaining(Math.max(0, 5 - result.totalHoursBooked));
+        setDailyLimit(result.dailyLimit || 5); // Use the returned limit
+        const remaining = Math.max(0, result.dailyLimit - result.totalHoursBooked);
+        setDailyHoursRemaining(remaining);
         
         setLoading(false);
+        setLoadingRequests(true);
+        const requests = await getUserHourRequests(currentUser.uid);
+        setHourRequests(requests);
+        const allowance = await getUserHourAllowance(currentUser.uid);
+        setDailyLimit(allowance.dailyHours || 5);
+        
+        setLoadingRequests(false);
       } catch (err) {
-        console.error("Error fetching reservations:", err);
+        console.error("Error fetching data:", err);
         setError("Failed to load reservations. Please try again.");
         setLoading(false);
+        setLoadingRequests(false);
       }
     };
 
@@ -187,7 +206,7 @@ function MyReservations() {
 
   // Daily Booking Summary Component
   const DailyBookingSummary = () => {
-    const percentUsed = (dailyHoursUsed / 5) * 100;
+    const percentUsed = (dailyHoursUsed / dailyLimit) * 100;
     
     return (
       <Paper sx={{ p: 3, mb: 3 }}>
@@ -198,18 +217,39 @@ function MyReservations() {
           <Button 
             variant="contained" 
             size="small"
-            startIcon={<AddIcon />}
-            onClick={() => navigate('/rooms')}
-            disabled={dailyHoursRemaining <= 0}
-            color="primary"
+            startIcon={dailyHoursRemaining > 0 ? <AddIcon /> : null}
+            onClick={dailyHoursRemaining > 0 ? () => navigate('/rooms') : () => setRequestFormOpen(true)}
+            color={dailyHoursRemaining > 0 ? "primary" : "warning"}
           >
-            {dailyHoursRemaining > 0 ? "Book Another Room" : "Daily Limit Reached"}
+            {dailyHoursRemaining > 0 ? "Book Another Room" : "Request More Hours"}
+          </Button>
+        </Box>
+        
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="subtitle2">
+            Daily Booking Limit ({dailyLimit} hours)
+            {dailyLimit > 5 && (
+              <Chip 
+                label="Extended" 
+                size="small" 
+                color="success" 
+                variant="outlined"
+                sx={{ ml: 1, height: 20 }}
+              />
+            )}
+          </Typography>
+          <Button 
+            variant="outlined"
+            size="small"
+            onClick={() => setRequestFormOpen(true)}
+          >
+            Request More Hours
           </Button>
         </Box>
         
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
           <Box sx={{ flexGrow: 1, mr: 1 }}>
-            <Tooltip title={`${dailyHoursUsed.toFixed(1)} hours used out of 5 hour daily limit`}>
+            <Tooltip title={`${dailyHoursUsed.toFixed(1)} hours used out of ${dailyLimit} hour daily limit`}>
               <LinearProgress 
                 variant="determinate" 
                 value={Math.min(percentUsed, 100)} 
@@ -219,18 +259,18 @@ function MyReservations() {
             </Tooltip>
           </Box>
           <Typography variant="body2" color="textSecondary" sx={{ minWidth: 70, textAlign: 'right' }}>
-            {dailyHoursUsed.toFixed(1)}/5 hrs
+            {dailyHoursUsed.toFixed(1)}/{dailyLimit} hrs
           </Typography>
         </Box>
         
         <Typography 
           variant="body2" 
-          color={dailyHoursRemaining <= 0 ? "error" : "textSecondary"}
+          color={dailyHoursRemaining <= 0 ? "error.main" : "textSecondary"}
           sx={{ fontWeight: dailyHoursRemaining <= 0 ? 'medium' : 'normal', mb: 2 }}
         >
           {dailyHoursRemaining <= 0 
-            ? "You've reached your daily booking limit of 5 hours"
-            : `You can book ${dailyHoursRemaining.toFixed(1)} more hours today`}
+            ? "You've reached your daily booking limit. Request more Hours" 
+            : `You can book ${dailyHoursRemaining.toFixed(1)} more hours today (${dailyHoursUsed.toFixed(1)}/${dailyLimit} hours used)`}
         </Typography>
         
         <Divider sx={{ my: 2 }} />
@@ -296,9 +336,43 @@ function MyReservations() {
             </Button>
           </Box>
         )}
+        
+        {/* Hour requests section - shows pending requests */}
+        {hourRequests.some(req => req.status === 'pending') && (
+          <Box sx={{ mt: 3, pt: 2, borderTop: '1px dashed #ddd' }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Pending hour extension requests:
+            </Typography>
+            {hourRequests
+              .filter(req => req.status === 'pending')
+              .map((request, index) => (
+                <Box 
+                  key={index}
+                  sx={{ 
+                    p: 1.5, 
+                    bgcolor: 'rgba(255, 152, 0, 0.1)', 
+                    borderRadius: 1,
+                    mt: 1
+                  }}
+                >
+                  <Typography variant="body2">
+                    <strong>+{request.hoursRequested} hours</strong> - {request.reason.substring(0, 80)}
+                    {request.reason.length > 80 ? '...' : ''}
+                  </Typography>
+                  <Chip 
+                    label="Pending approval" 
+                    size="small" 
+                    color="warning" 
+                    sx={{ mt: 1, height: 20, fontSize: '0.65rem' }}
+                  />
+                </Box>
+            ))}
+          </Box>
+        )}
       </Paper>
     );
   };
+  
   
   // Tab change handler
   const handleTabChange = (event, newValue) => {
@@ -664,6 +738,12 @@ function MyReservations() {
           </Button>
         </DialogActions>
       </Dialog>
+      
+      <RequestHoursForm 
+        open={requestFormOpen}
+        onClose={() => setRequestFormOpen(false)}
+        onSuccess={() => setRefreshTrigger(prev => prev + 1)}
+      />
     </Container>
   );
 }
