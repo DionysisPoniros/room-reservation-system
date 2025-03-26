@@ -1,4 +1,4 @@
-// src/pages/Rooms.js - Performance Optimized
+// src/pages/Rooms.js - Updated with map view integration
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { 
@@ -6,9 +6,6 @@ import {
   Typography, 
   Box, 
   Grid, 
-  Card, 
-  CardContent, 
-  CardActions, 
   Button, 
   Chip,
   CircularProgress,
@@ -24,9 +21,8 @@ import {
 import RoomSearch from '../components/rooms/RoomSearch';
 import RoomScheduleView from '../components/rooms/RoomScheduleView';
 import RoomCard from '../components/rooms/RoomCard';
+import RoomVisualizer from '../components/rooms/RoomVisualizer';
 import { getRooms, searchAvailableRooms, getPopularRooms, getRoomReservations, getReservationsForDate } from '../services/roomService';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
-import { db } from '../firebase/config';
 
 // Icons
 import ViewListIcon from '@mui/icons-material/ViewList';
@@ -47,7 +43,7 @@ function Rooms() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [searchParams, setSearchParams] = useState(null);
-  const [viewMode, setViewMode] = useState('schedule'); 
+  const [viewMode, setViewMode] = useState('list'); 
   const [reservations, setReservations] = useState({});
   const [scheduleDate, setScheduleDate] = useState(new Date());
   const [lastRefresh, setLastRefresh] = useState(Date.now());
@@ -153,11 +149,6 @@ function Rooms() {
   }, [rooms, displayedRooms, INITIAL_ROOM_LIMIT]);
 
   // Fetch reservations for the current date only (more efficient)
-  // In src/pages/Rooms.js
-
-// Modify the code in the fetchReservationsForCurrentDate function
-// to get all rooms, not just available ones
-
   const fetchReservationsForCurrentDate = useCallback(async (roomsToCheck) => {
     try {
       console.log("Fetching reservations for date:", scheduleDate);
@@ -258,10 +249,7 @@ function Rooms() {
     }
   }, [scheduleDate, rooms, fetchReservationsForCurrentDate]);
 
-  // Handler for search - optimized to avoid unnecessary re-renders
-// In src/pages/Rooms.js
-
-// Modify the handleSearch function to keep all rooms but mark availability
+  // Handler for search
   const handleSearch = useCallback(async (searchParams) => {
     try {
       setSearching(true);
@@ -308,7 +296,7 @@ function Rooms() {
     } finally {
       setSearching(false);
     }
-  }, [fetchReservationsForCurrentDate]);
+  }, []);
 
   // Clear search handler
   const clearSearch = useCallback(async () => {
@@ -331,10 +319,8 @@ function Rooms() {
   }, [fetchRooms, fetchReservationsForCurrentDate]);
 
   // View mode change handler
-  const handleViewChange = useCallback((event, newView) => {
-    if (newView !== null) {
-      setViewMode(newView);
-    }
+  const handleViewChange = useCallback((newView) => {
+    setViewMode(newView);
   }, []);
 
   // Schedule date change handler
@@ -382,7 +368,11 @@ function Rooms() {
         </Typography>
         
         {/* Search Component */}
-        <RoomSearch onSearch={handleSearch} />
+        <RoomSearch 
+          onSearch={handleSearch} 
+          onViewModeChange={handleViewChange}
+          currentViewMode={viewMode} 
+        />
         
         {/* Search Results Controls */}
         <Box sx={{ mb: 3, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between' }}>
@@ -400,24 +390,6 @@ function Rooms() {
           ) : (
             <Box></Box>
           )}
-          
-          <ToggleButtonGroup
-            value={viewMode}
-            exclusive
-            onChange={handleViewChange}
-            aria-label="view mode"
-            sx={{ justifySelf: 'flex-end' }}
-          >
-            <ToggleButton value="list" aria-label="list view">
-              <ViewListIcon />
-            </ToggleButton>
-            <ToggleButton value="schedule" aria-label="schedule view">
-              <CalendarViewDayIcon />
-            </ToggleButton>
-            <ToggleButton value="map" aria-label="map view">
-              <MapIcon />
-            </ToggleButton>
-          </ToggleButtonGroup>
         </Box>
         
         {/* Show loading indicator for searches */}
@@ -574,24 +546,14 @@ function Rooms() {
           {viewMode === 'map' && (
             <>
               <Typography variant="h5" sx={{ mb: 2 }}>
-                Room Map
+                Interactive Map
               </Typography>
               
-              <Paper sx={{ p: 3, textAlign: 'center' }}>
-                <Typography variant="h6">
-                  3D Map visualization is under development
-                </Typography>
-                <Typography paragraph sx={{ my: 2 }}>
-                  Check back soon for an interactive 3D map of our campus rooms
-                </Typography>
-                <Button 
-                  variant="outlined" 
-                  color="primary"
-                  onClick={() => setViewMode('schedule')}
-                >
-                  View Schedule Instead
-                </Button>
-              </Paper>
+              {roomsLoading ? (
+                renderLoadingPlaceholders
+              ) : (
+                <RoomVisualizer />
+              )}
             </>
           )}
         </Box>

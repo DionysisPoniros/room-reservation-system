@@ -1,4 +1,4 @@
-// src/components/rooms/RoomSearch.js - Fixed
+// src/components/rooms/RoomSearch.js - Enhanced with map support
 import React, { useState, useEffect } from 'react';
 import { 
   Box, 
@@ -21,7 +21,9 @@ import {
   Collapse,
   useTheme,
   CircularProgress,
-  Alert
+  Alert,
+  ToggleButtonGroup,
+  ToggleButton
 } from '@mui/material';
 import { DateTimePicker, DatePicker } from '@mui/x-date-pickers';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -29,12 +31,16 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { set, addHours } from 'date-fns';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../firebase/config';
+import { MAP_CONFIG } from '../../services/mapService';
 
 // Icons
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import SearchIcon from '@mui/icons-material/Search';
+import ViewListIcon from '@mui/icons-material/ViewList';
+import CalendarViewDayIcon from '@mui/icons-material/CalendarViewDay';
+import MapIcon from '@mui/icons-material/Map';
 
 // Equipment options
 const equipmentOptions = [
@@ -48,7 +54,7 @@ const equipmentOptions = [
   "Document Camera"
 ];
 
-function RoomSearch({ onSearch }) {
+function RoomSearch({ onSearch, onViewModeChange, currentViewMode = 'list' }) {
   const theme = useTheme();
   const [startTime, setStartTime] = useState(new Date());
   const [endTime, setEndTime] = useState(addHours(new Date(), 1));
@@ -63,6 +69,7 @@ function RoomSearch({ onSearch }) {
   const [buildings, setBuildings] = useState([]);
   const [loadingFilters, setLoadingFilters] = useState(false);
   const [error, setError] = useState(null);
+  const [viewMode, setViewMode] = useState(currentViewMode);
   
   // Fetch room types and buildings from database
   useEffect(() => {
@@ -94,6 +101,9 @@ function RoomSearch({ onSearch }) {
             }
           }
         });
+        
+        // Add pre-defined buildings from the map config
+        MAP_CONFIG.buildings.forEach(b => buildingNames.add(b));
         
         setRoomTypes(Array.from(types).sort());
         setBuildings(Array.from(buildingNames).sort());
@@ -164,6 +174,18 @@ function RoomSearch({ onSearch }) {
       setSearchMode(newMode);
     }
   };
+  
+  // Handle view mode change
+  const handleViewModeChange = (event, newMode) => {
+    if (newMode !== null) {
+      setViewMode(newMode);
+      
+      // Notify parent component
+      if (onViewModeChange) {
+        onViewModeChange(newMode);
+      }
+    }
+  };
 
   return (
     <Paper sx={{ p: 3, mb: 3 }}>
@@ -172,21 +194,42 @@ function RoomSearch({ onSearch }) {
           Find Available Rooms
         </Typography>
         
-        <FormControl component="fieldset">
-          <FormGroup row>
-            <FormControlLabel
-              control={
-                <Checkbox 
-                  checked={advanced} 
-                  onChange={(e) => setAdvanced(e.target.checked)} 
-                  icon={<FilterListIcon />}
-                  checkedIcon={<FilterListIcon />}
-                />
-              }
-              label={advanced ? "Hide Filters" : "Show Filters"}
-            />
-          </FormGroup>
-        </FormControl>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <ToggleButtonGroup
+            value={viewMode}
+            exclusive
+            onChange={handleViewModeChange}
+            aria-label="view mode"
+            size="small"
+            sx={{ mr: 2 }}
+          >
+            <ToggleButton value="list" aria-label="list view">
+              <ViewListIcon />
+            </ToggleButton>
+            <ToggleButton value="schedule" aria-label="schedule view">
+              <CalendarViewDayIcon />
+            </ToggleButton>
+            <ToggleButton value="map" aria-label="map view">
+              <MapIcon />
+            </ToggleButton>
+          </ToggleButtonGroup>
+          
+          <FormControl component="fieldset">
+            <FormGroup row>
+              <FormControlLabel
+                control={
+                  <Checkbox 
+                    checked={advanced} 
+                    onChange={(e) => setAdvanced(e.target.checked)} 
+                    icon={<FilterListIcon />}
+                    checkedIcon={<FilterListIcon />}
+                  />
+                }
+                label={advanced ? "Hide Filters" : "Show Filters"}
+              />
+            </FormGroup>
+          </FormControl>
+        </Box>
       </Box>
       
       {error && (
