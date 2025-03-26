@@ -300,7 +300,7 @@ export const getUserDailyBookings = async (userId, startDate, endDate) => {
     const userAllowanceRef = doc(db, 'userAllowances', userId);
     const userAllowanceSnap = await getDoc(userAllowanceRef);
     const dailyLimit = userAllowanceSnap.exists() ? 
-    userAllowanceSnap.data().dailyHours : 
+    userAllowanceSnap.data().dailyHours : 5;
     
     console.log(`Getting bookings for ${userId} from ${startDay.toLocaleString()} to ${endDay.toLocaleString()}`);
     

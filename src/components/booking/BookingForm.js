@@ -26,7 +26,7 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { useAuth } from '../../contexts/AuthContext';
-
+import { getUserHourAllowance } from '../../services/userService';
 import { addHours, setMinutes, setSeconds, setMilliseconds, format } from 'date-fns';
 import { 
   getRoom, 
@@ -66,6 +66,9 @@ function BookingForm() {
   const [hoursRemaining, setHoursRemaining] = useState(5);
   const [todayBookings, setTodayBookings] = useState([]);
   const [dailyLimit, setDailyLimit] = useState(5); // Add this state for custom limit
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [operationLoading, setOperationLoading] = useState(false);
+
   
   // Function to round time to the nearest hour
   function roundToHour(date) {
@@ -95,7 +98,7 @@ function BookingForm() {
   useEffect(() => {
     const fetchRoomAndUserData = async () => {
       try {
-        setLoading(true);
+        setInitialLoading(true); // Only use this for the initial room fetch
         setError(null);
         
         // Create today and tomorrow date objects first
@@ -111,7 +114,7 @@ function BookingForm() {
           setRoom(roomData);
         } else {
           setError("Room not found");
-          setLoading(false);
+          setInitialLoading(false);
           return;
         }
         
@@ -120,49 +123,40 @@ function BookingForm() {
           try {
             const result = await getUserDailyBookings(currentUser.uid, todayDate, tomorrowDate);
             
-            const customDailyLimit = result.dailyLimit || 5;
-            setDailyLimit(customDailyLimit); // Store the custom limit in state
+            // Use the user's custom allowance
+            const allowance = await getUserHourAllowance(currentUser.uid);
+            const userDailyLimit = allowance.dailyHours || 5;
+            setDailyLimit(userDailyLimit);
             
             // Set daily booking info
             setTodayBookings(result.bookings || []);
             setDailyBookingHours(result.totalHoursBooked || 0);
             
-            // Check against custom limit
-            if (duration > customDailyLimit) {
-              setError(`You can only book up to ${customDailyLimit} hours per day.`);
-              setLoading(false);
-              return;
-            }
-            
-            // Calculate remaining hours, ensuring it's not negative
-            const remaining = Math.max(0, customDailyLimit - result.totalHoursBooked);
+            // Calculate remaining hours using the custom limit
+            const remaining = Math.max(0, userDailyLimit - result.totalHoursBooked);
             setHoursRemaining(remaining);
             
-            // If the current selected duration is greater than remaining hours,
-            // adjust it to the maximum available (but keep at least 1)
+            // Adjust duration if needed based on the custom limit
             if (duration > remaining && remaining > 0) {
-              setDuration(Math.floor(remaining)); // Floor to get a whole number
+              setDuration(Math.floor(remaining));
             } else if (remaining <= 0) {
-              setDuration(1); // Keep at minimum 1 hour but disable booking
+              setDuration(1);
             }
-            
-            console.log(`User has booked ${result.totalHoursBooked.toFixed(1)} hours today, ${remaining.toFixed(1)} hours remaining.`);
           } catch (bookingError) {
             console.error("Error fetching user's daily bookings:", bookingError);
-            // Don't set an error for this, just log it, as it's not critical
           }
         }
         
-        setLoading(false);
+        setInitialLoading(false);
       } catch (err) {
         console.error("Error fetching data:", err);
         setError("Failed to load data. Please try again.");
-        setLoading(false);
+        setInitialLoading(false);
       }
     };
 
-  fetchRoomAndUserData();
-}, [id, currentUser, duration]);
+    fetchRoomAndUserData();
+  }, [id, currentUser]); // Only depend on id and currentUser, not time-related states
 
   // Update end time when start time or duration changes
   useEffect(() => {
@@ -358,7 +352,7 @@ function BookingForm() {
   };
 
   // Main render
-  if (loading) return (
+  if (initialLoading) return (
     <Container maxWidth="md">
       <Box sx={{ my: 4, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <CircularProgress sx={{ mb: 2 }} />
@@ -544,7 +538,7 @@ function BookingForm() {
                   type="submit" 
                   variant="contained" 
                   color="primary"
-                  disabled={submitting || dailyBookingHours >= 5}
+                  disabled={submitting || dailyBookingHours >= dailyLimit}
                   fullWidth
                   startIcon={submitting ? <CircularProgress size={20} color="inherit" /> : null}
                   sx={{ py: 1.5 }}

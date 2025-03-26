@@ -71,7 +71,7 @@ function MyReservations() {
       navigate('/login');
       return;
     }
-
+  
     const fetchReservations = async () => {
       try {
         setLoading(true);
@@ -100,23 +100,33 @@ function MyReservations() {
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
         
-        // Get today's bookings and calculate daily limit
-
-        const result = await getUserDailyBookings(currentUser.uid, today, tomorrow);
-        setTodayBookings(result.bookings || []);
-        setDailyHoursUsed(result.totalHoursBooked || 0);
-        setDailyLimit(result.dailyLimit || 5); // Use the returned limit
-        const remaining = Math.max(0, result.dailyLimit - result.totalHoursBooked);
-        setDailyHoursRemaining(remaining);
-        
         setLoading(false);
         setLoadingRequests(true);
-        const requests = await getUserHourRequests(currentUser.uid);
-        setHourRequests(requests);
-        const allowance = await getUserHourAllowance(currentUser.uid);
-        setDailyLimit(allowance.dailyHours || 5);
         
-        setLoadingRequests(false);
+        try {
+          // Get user hour requests and allowance first
+          const requests = await getUserHourRequests(currentUser.uid);
+          setHourRequests(requests);
+          
+          // Get the user's custom allowance (most authoritative source)
+          const allowance = await getUserHourAllowance(currentUser.uid);
+          const userDailyLimit = allowance.dailyHours || 5;
+          setDailyLimit(userDailyLimit);
+          
+          // Now get today's bookings with knowledge of the correct limit
+          const result = await getUserDailyBookings(currentUser.uid, today, tomorrow);
+          setTodayBookings(result.bookings || []);
+          setDailyHoursUsed(result.totalHoursBooked || 0);
+          
+          // Calculate remaining hours using the authoritative userDailyLimit
+          const remaining = Math.max(0, userDailyLimit - result.totalHoursBooked);
+          setDailyHoursRemaining(remaining);
+          
+          setLoadingRequests(false);
+        } catch (requestErr) {
+          console.error("Error fetching hour requests or allowance:", requestErr);
+          setLoadingRequests(false);
+        }
       } catch (err) {
         console.error("Error fetching data:", err);
         setError("Failed to load reservations. Please try again.");
@@ -124,7 +134,7 @@ function MyReservations() {
         setLoadingRequests(false);
       }
     };
-
+  
     fetchReservations();
   }, [currentUser, navigate, refreshTrigger]);
 
