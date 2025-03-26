@@ -126,7 +126,10 @@ const isRoomBooked = (roomId, timeSlot) => {
           
           // Check if reservation overlaps with this time slot
           return (
-            (resStart <= slotEnd && resEnd >= slotStart)
+            // Either the reservation starts during this hour slot
+            (resStart >= slotStart && resStart < slotEnd) ||
+            // Or the hour slot falls entirely within the reservation period
+            (resStart <= slotStart && resEnd >= slotEnd)
           );
         } catch (reservationTimeError) {
           console.error("Error with reservation time:", reservationTimeError);

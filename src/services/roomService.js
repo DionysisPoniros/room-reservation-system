@@ -365,7 +365,15 @@ export const getUserDailyBookings = async (userId, startDate, endDate) => {
         durationHours
       };
     });
-    
+    const bookingsWithRooms = await Promise.all(bookingsWithHours.map(async (booking) => {
+      try {
+        const roomData = await getRoom(booking.roomId);
+        return { ...booking, room: roomData };
+      } catch (err) {
+        console.error(`Error fetching room for booking ${booking.id}:`, err);
+        return booking;
+      }
+    }));
     const totalHoursBooked = bookingsWithHours.reduce((total, booking) => total + booking.durationHours, 0);
     console.log(`Total hours booked for today: ${totalHoursBooked.toFixed(2)}`);
     
