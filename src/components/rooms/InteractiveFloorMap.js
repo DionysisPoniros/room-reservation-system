@@ -9,10 +9,8 @@ import {
   CircularProgress,
   Alert,
   Chip,
-  Slider,
   useTheme
 } from '@mui/material';
-import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 
 // Import Icons
@@ -23,38 +21,36 @@ import LocationOnIcon from '@mui/icons-material/LocationOn';
 import MeetingRoomIcon from '@mui/icons-material/MeetingRoom';
 
 const FLOOR_PLANS = {
-    "Max Lowenthal Hall": {
+  "Max Lowenthal Hall": {
     "1st Floor": "/images/floor-plans/LOW-1.svg",
     "2nd Floor": "/images/floor-plans/LOW-2.svg",
     "3rd Floor": "/images/floor-plans/LOW-3.svg",
     "4th Floor": "/images/floor-plans/LOW-4.svg",
     "A-Level": "/images/floor-plans/LOW-A.svg"
-    },
-    "Wallace Library": {
+  },
+  "Wallace Library": {
     "1st Floor": "/images/floor-plans/WAL-1.svg",
     "2nd Floor": "/images/floor-plans/WAL-2.svg",
     "3rd Floor": "/images/floor-plans/WAL-3.svg",
     "4th Floor": "/images/floor-plans/WAL-4.svg",
     "A-Level": "/images/floor-plans/WAL-A.svg"
-    }
-    
+  }
 };
 
 // Room overlay data - defines where rooms are on each floor
-// This could be loaded from your existing room overlay data
 const ROOM_OVERLAYS = {
   "Max Lowenthal Hall": {
     "1st Floor": {
-      "LOW-1050": { x: 130, y: 85, width: 130, height: 90, label: "Gueldenpfennig Auditorium" },
-      "LOW-1060": { x: 50, y: 150, width: 30, height: 40, label: "Bruce May Room" },
+      "LOW-1050": {  },
+      "LOW-1060": { },
       // Add more rooms here
     }
     // Add more floors here
   },
   "Wallace Library": {
     "1st Floor": {
-      "WAL-1545": { x: 535, y: 340, width: 40, height: 25, label: "Group Study Room" },
-      "WAL-1624": { x: 600, y: 400, width: 100, height: 80, label: "Circulation Lobby" },
+      "WAL-1545": {},
+      "WAL-1624": {  },
       // Add more rooms here
     }
     // Add more floors here
@@ -63,9 +59,6 @@ const ROOM_OVERLAYS = {
 
 /**
  * Interactive Floor Map Component
- * 
- * A fully interactive map with pan and zoom capabilities
- * for navigating building floor plans.
  */
 const InteractiveFloorMap = ({ 
   building = "Max Lowenthal Hall", 
@@ -83,17 +76,19 @@ const InteractiveFloorMap = ({
   const svgRef = useRef(null);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [hoveredRoom, setHoveredRoom] = useState(null);
-  
-  // Add state for manual pan and zoom (if not using react-zoom-pan-pinch)
-  const [scale, setScale] = useState(1);
-  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [svgLoaded, setSvgLoaded] = useState(false);
   
   // Fetch SVG content
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchSvgContent = async () => {
       try {
+        if (!isMounted) return;
+        
         setLoading(true);
         setError(null);
+        setSvgLoaded(false);
         
         // Get the SVG URL for the current building and floor
         const svgUrl = FLOOR_PLANS[building]?.[floor];
@@ -109,16 +104,40 @@ const InteractiveFloorMap = ({
         }
         
         const svgText = await response.text();
-        setSvgContent(svgText);
-        setLoading(false);
+        
+        if (!isMounted) return;
+        
+        // Add a small delay to ensure DOM is ready before setting content
+        setTimeout(() => {
+          if (isMounted) {
+            setSvgContent(svgText);
+            setLoading(false);
+            
+            // Add another small delay before declaring SVG as loaded
+            // This helps prevent react-zoom-pan-pinch from calculating bounds too early
+            setTimeout(() => {
+              if (isMounted) {
+                setSvgLoaded(true);
+              }
+            }, 100);
+          }
+        }, 10);
       } catch (err) {
-        console.error("Error loading floor plan:", err);
-        setError(err.message);
-        setLoading(false);
+        if (isMounted) {
+          console.error("Error loading floor plan:", err);
+          setError(err.message);
+          setLoading(false);
+          setSvgLoaded(false);
+        }
       }
     };
     
     fetchSvgContent();
+    
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
   }, [building, floor]);
   
   // Check if a room is occupied
@@ -169,30 +188,24 @@ const InteractiveFloorMap = ({
       
       return (
         <g key={roomId}>
-          <Tooltip 
-            title={`${roomData.label || roomId} (${isOccupied ? 'Occupied' : 'Available'})`}
-            arrow
-            placement="top"
-          >
-            <rect
-              x={roomData.x}
-              y={roomData.y}
-              width={roomData.width}
-              height={roomData.height}
-              fill={color}
-              stroke="rgba(0, 0, 0, 0.4)"
-              strokeWidth={borderWidth}
-              rx={5}
-              ry={5}
-              style={{ 
-                cursor: 'pointer',
-                transition: 'all 0.2s ease-in-out',
-              }}
-              onClick={() => handleRoomClick(roomId)}
-              onMouseEnter={() => setHoveredRoom(roomId)}
-              onMouseLeave={() => setHoveredRoom(null)}
-            />
-          </Tooltip>
+          <rect
+            x={roomData.x}
+            y={roomData.y}
+            width={roomData.width}
+            height={roomData.height}
+            fill={color}
+            stroke="rgba(0, 0, 0, 0.4)"
+            strokeWidth={borderWidth}
+            rx={5}
+            ry={5}
+            style={{ 
+              cursor: 'pointer',
+              transition: 'all 0.2s ease-in-out',
+            }}
+            onClick={() => handleRoomClick(roomId)}
+            onMouseEnter={() => setHoveredRoom(roomId)}
+            onMouseLeave={() => setHoveredRoom(null)}
+          />
           
           {/* Room label - show for larger rooms */}
           {roomData.width > 60 && roomData.height > 30 && (
@@ -212,6 +225,8 @@ const InteractiveFloorMap = ({
               {roomData.label || roomId}
             </text>
           )}
+          
+          <title>{`${roomData.label || roomId} (${isOccupied ? 'Occupied' : 'Available'})`}</title>
         </g>
       );
     });
@@ -236,44 +251,125 @@ const InteractiveFloorMap = ({
   
   return (
     <Paper sx={{ p: 2, position: 'relative', height: 600, overflow: 'hidden' }}>
-      {/* Map Controls */}
-      <Box sx={{ 
-        position: 'absolute', 
-        top: 10, 
-        right: 10, 
-        zIndex: 10,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 1,
-        bgcolor: 'rgba(255, 255, 255, 0.7)',
-        p: 1,
-        borderRadius: 1,
-        boxShadow: 1
-      }}>
-        <TransformWrapper>
+      {/* Map Content */}
+      {svgLoaded ? (
+        <TransformWrapper
+          initialScale={1}
+          minScale={0.5}
+          maxScale={3}
+          wheel={{ step: 0.1 }}
+          centerOnInit={true}
+          limitToBounds={false}
+          doubleClick={{ disabled: true }}
+        >
           {({ zoomIn, zoomOut, resetTransform }) => (
             <>
-              <Tooltip title="Zoom In">
-                <IconButton onClick={() => zoomIn()} size="small">
-                  <ZoomInIcon />
-                </IconButton>
-              </Tooltip>
+              {/* Map Controls - Using reference to parent TransformWrapper */}
+              <Box sx={{ 
+                position: 'absolute', 
+                top: 10, 
+                right: 10, 
+                zIndex: 10,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1,
+                bgcolor: 'rgba(255, 255, 255, 0.7)',
+                p: 1,
+                borderRadius: 1,
+                boxShadow: 1
+              }}>
+                <Tooltip title="Zoom In">
+                  <IconButton onClick={() => zoomIn()} size="small">
+                    <ZoomInIcon />
+                  </IconButton>
+                </Tooltip>
+                
+                <Tooltip title="Zoom Out">
+                  <IconButton onClick={() => zoomOut()} size="small">
+                    <ZoomOutIcon />
+                  </IconButton>
+                </Tooltip>
+                
+                <Tooltip title="Reset View">
+                  <IconButton onClick={() => resetTransform()} size="small">
+                    <RestartAltIcon />
+                  </IconButton>
+                </Tooltip>
+              </Box>
               
-              <Tooltip title="Zoom Out">
-                <IconButton onClick={() => zoomOut()} size="small">
-                  <ZoomOutIcon />
-                </IconButton>
-              </Tooltip>
-              
-              <Tooltip title="Reset View">
-                <IconButton onClick={() => resetTransform()} size="small">
-                  <RestartAltIcon />
-                </IconButton>
-              </Tooltip>
+              <TransformComponent
+                wrapperStyle={{ width: '100%', height: '100%' }}
+                contentStyle={{ width: '100%', height: '100%' }}
+              >
+                <Box 
+                  sx={{ 
+                    width: '100%', 
+                    height: '100%', 
+                    position: 'relative',
+                    backgroundColor: '#f5f5f5',
+                  }}
+                  ref={svgRef}
+                >
+                  {/* SVG Floor Plan */}
+                  {svgContent ? (
+                    <Box 
+                      sx={{ width: '100%', height: '100%' }}
+                      dangerouslySetInnerHTML={{ __html: svgContent }}
+                    />
+                  ) : (
+                    <Box 
+                      sx={{ 
+                        width: '100%', 
+                        height: '100%', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center' 
+                      }}
+                    >
+                      <Typography variant="body1" color="text.secondary">
+                        No floor plan available
+                      </Typography>
+                    </Box>
+                  )}
+                  
+                  {/* Room Overlays */}
+                  <svg 
+                    width="100%" 
+                    height="100%" 
+                    style={{ 
+                      position: 'absolute', 
+                      top: 0, 
+                      left: 0, 
+                      pointerEvents: 'none',
+                      zIndex: 5
+                    }}
+                    aria-label="Room overlays"
+                  >
+                    <g style={{ pointerEvents: 'all' }}>
+                      {renderRoomOverlays()}
+                    </g>
+                  </svg>
+                </Box>
+              </TransformComponent>
             </>
           )}
         </TransformWrapper>
-      </Box>
+      ) : (
+        <Box 
+          sx={{ 
+            width: '100%', 
+            height: '100%', 
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center', 
+            justifyContent: 'center',
+            backgroundColor: '#f5f5f5',
+          }}
+        >
+          <CircularProgress size={40} sx={{ mb: 2 }} />
+          <Typography>Preparing interactive map...</Typography>
+        </Box>
+      )}
       
       {/* Current Location Indicator */}
       <Box sx={{ 
@@ -322,72 +418,6 @@ const InteractiveFloorMap = ({
           sx={{ bgcolor: 'rgba(244, 67, 54, 0.7)', color: 'white' }} 
         />
       </Box>
-      
-      {/* Interactive Map with Pan and Zoom */}
-      <TransformWrapper
-        initialScale={1}
-        minScale={0.5}
-        maxScale={3}
-        initialPositionX={0}
-        initialPositionY={0}
-        centerZoomedOut={true}
-        centerOnInit={true}
-        wheel={{ step: 0.1 }}
-      >
-        <TransformComponent 
-          wrapperStyle={{ width: '100%', height: '100%' }}
-          contentStyle={{ width: '100%', height: '100%' }}
-        >
-          <Box 
-            sx={{ 
-              width: '100%', 
-              height: '100%', 
-              position: 'relative',
-              backgroundColor: '#f5f5f5',
-            }}
-            ref={svgRef}
-          >
-            {/* SVG Floor Plan */}
-            {svgContent ? (
-              <Box 
-                sx={{ width: '100%', height: '100%' }}
-                dangerouslySetInnerHTML={{ __html: svgContent }}
-              />
-            ) : (
-              <Box 
-                sx={{ 
-                  width: '100%', 
-                  height: '100%', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center' 
-                }}
-              >
-                <Typography variant="body1" color="text.secondary">
-                  No floor plan available
-                </Typography>
-              </Box>
-            )}
-            
-            {/* Room Overlays */}
-            <svg 
-              width="100%" 
-              height="100%" 
-              style={{ 
-                position: 'absolute', 
-                top: 0, 
-                left: 0, 
-                pointerEvents: 'none',
-                zIndex: 5
-              }}
-            >
-              <g style={{ pointerEvents: 'all' }}>
-                {renderRoomOverlays()}
-              </g>
-            </svg>
-          </Box>
-        </TransformComponent>
-      </TransformWrapper>
     </Paper>
   );
 };

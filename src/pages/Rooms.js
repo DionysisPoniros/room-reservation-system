@@ -43,7 +43,7 @@ function Rooms() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [searchParams, setSearchParams] = useState(null);
-  const [viewMode, setViewMode] = useState('list'); 
+  const [viewMode, setViewMode] = useState('schedule'); 
   const [reservations, setReservations] = useState({});
   const [scheduleDate, setScheduleDate] = useState(new Date());
   const [lastRefresh, setLastRefresh] = useState(Date.now());
