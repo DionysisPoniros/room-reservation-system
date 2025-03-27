@@ -21,7 +21,7 @@ import {
 import RoomSearch from '../components/rooms/RoomSearch';
 import RoomScheduleView from '../components/rooms/RoomScheduleView';
 import RoomCard from '../components/rooms/RoomCard';
-import RoomVisualizer from '../components/rooms/RoomVisualizer';
+import RoomVisualizer from '../components/rooms/EnhancedRoomVisualizer';
 import { getRooms, searchAvailableRooms, getPopularRooms, getRoomReservations, getReservationsForDate } from '../services/roomService';
 
 // Icons
