@@ -1,5 +1,5 @@
 // src/components/rooms/EnhancedRoomVisualizer.js
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   Box, 
   Paper, 
@@ -26,7 +26,11 @@ import {
   Alert,
   Skeleton,
   Fade,
-  Snackbar
+  Snackbar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { getRooms, getRoomReservations, getRoom } from '../../services/roomService';
@@ -54,18 +58,142 @@ import WifiIcon from '@mui/icons-material/Wifi';
 import RateReviewIcon from '@mui/icons-material/RateReview';
 import ImageSearchIcon from '@mui/icons-material/ImageSearch';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import EventAvailableIcon from '@mui/icons-material/EventAvailable';
+import EventIcon from '@mui/icons-material/Event';
+import CalendarViewDayIcon from '@mui/icons-material/CalendarViewDay';
+import MapIcon from '@mui/icons-material/Map';
+import ViewListIcon from '@mui/icons-material/ViewList';
 
-// Configure PDF.js worker
-if (typeof window !== 'undefined' && 'pdfjs' in window) {
-  pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
-} else {
-  // Fallback worker path
-  const pdfjsWorker = process.env.PUBLIC_URL + '/pdf.worker.min.js';
-  pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
-}
+const pdfWorkerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+  pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
+
+const PDFViewer = ({ pdfUrl, scale, onRenderComplete }) => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const iframeRef = useRef(null);
+
+  useEffect(() => {
+    if (!pdfUrl) {
+      setError("No PDF file provided");
+      setLoading(false);
+      return;
+    }
+
+    // Setting a timeout to simulate loading state
+    const timer = setTimeout(() => {
+      setLoading(false);
+      
+      // Report dimensions when iframe is loaded
+      if (iframeRef.current && onRenderComplete) {
+        const width = iframeRef.current.offsetWidth;
+        const height = iframeRef.current.offsetHeight;
+        onRenderComplete({ width, height });
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [pdfUrl, onRenderComplete]);
+
+  return (
+    <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
+      {/* Loading indicator */}
+      {loading && (
+        <Box 
+          sx={{ 
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: 'rgba(255, 255, 255, 0.8)',
+            zIndex: 10
+          }}
+        >
+          <CircularProgress size={40} sx={{ mb: 2 }} />
+          <Typography>Loading floor plan...</Typography>
+        </Box>
+      )}
+      
+      {/* Error message */}
+      {error && (
+        <Box 
+          sx={{ 
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            p: 2,
+            zIndex: 10
+          }}
+        >
+          <Alert 
+            severity="error" 
+            sx={{ 
+              width: '100%', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'flex-start'
+            }}
+          >
+            <Typography paragraph>{error}</Typography>
+            <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+              <Button 
+                variant="outlined" 
+                size="small" 
+                onClick={() => window.location.reload()}
+                startIcon={<RefreshIcon />}
+              >
+                Try Again
+              </Button>
+            </Box>
+          </Alert>
+        </Box>
+      )}
+      
+      {/* PDF iframe */}
+      <Box 
+        component="iframe"
+        ref={iframeRef}
+        src={pdfUrl}
+        title="Floor Plan"
+        sx={{ 
+          width: '100%',
+          height: '100%',
+          border: 'none',
+          display: loading ? 'none' : 'block'
+        }}
+        onError={() => setError("Failed to load PDF")}
+      />
+    </Box>
+  );
+};
+
+// Find room ID from coordinates
+const findRoomAtCoordinates = (building, floor, x, y) => {
+  if (!roomOverlays[building] || !roomOverlays[building][floor]) return null;
+  
+  const rooms = roomOverlays[building][floor];
+  
+  for (const roomId in rooms) {
+    const room = rooms[roomId];
+    if (x >= room.x && x <= room.x + room.width && 
+        y >= room.y && y <= room.y + room.height) {
+      return roomId;
+    }
+  }
+  
+  return null;
+};
 
 // Room overlay data - pre-defined coordinates for rooms on each floor
-// These would ideally come from a database or API in a production environment
 const roomOverlays = {
   "Max Lowenthal Hall": {
     "1st Floor": {
@@ -127,209 +255,6 @@ const roomOverlays = {
       "WAL-A600": { x: 210, y: 430, width: 80, height: 60, label: "Faculty Commons" }
     }
   }
-};
-
-// Find room ID from coordinates
-const findRoomAtCoordinates = (building, floor, x, y) => {
-  if (!roomOverlays[building] || !roomOverlays[building][floor]) return null;
-  
-  const rooms = roomOverlays[building][floor];
-  
-  for (const roomId in rooms) {
-    const room = rooms[roomId];
-    if (x >= room.x && x <= room.x + room.width && 
-        y >= room.y && y <= room.y + room.height) {
-      return roomId;
-    }
-  }
-  
-  return null;
-};
-
-// PDFViewer Component - Separated for clarity
-const PDFViewer = ({ pdfUrl, scale, onRenderComplete }) => {
-  const canvasRef = useRef(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [retryCount, setRetryCount] = useState(0);
-  
-  useEffect(() => {
-    if (!pdfUrl) {
-      setError("No PDF file provided");
-      setLoading(false);
-      return;
-    }
-
-    let isMounted = true;
-    let renderTask = null;
-    let pdfDocument = null;
-
-    const renderPDF = async () => {
-      if (!canvasRef.current) return;
-      
-      try {
-        setLoading(true);
-        setError(null);
-        
-        console.log(`Rendering PDF: ${pdfUrl} at scale ${scale}`);
-        
-        // Load the PDF
-        const loadingTask = pdfjs.getDocument(pdfUrl);
-        pdfDocument = await loadingTask.promise;
-        
-        if (!isMounted) return;
-        
-        // Get the first page
-        const page = await pdfDocument.getPage(1);
-        if (!isMounted) return;
-        
-        // Get viewport for rendering
-        const viewport = page.getViewport({ scale });
-        const canvas = canvasRef.current;
-        
-        // Set canvas dimensions to match viewport
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        
-        // Render the PDF page to the canvas
-        const context = canvas.getContext('2d');
-        renderTask = page.render({
-          canvasContext: context,
-          viewport
-        });
-        
-        await renderTask.promise;
-        
-        if (!isMounted) return;
-        
-        setLoading(false);
-        
-        // Notify parent that rendering is complete
-        if (onRenderComplete) {
-          onRenderComplete({
-            width: viewport.width,
-            height: viewport.height
-          });
-        }
-
-      } catch (err) {
-        console.error("Error rendering PDF:", err);
-        if (isMounted) {
-          setError(`Failed to render floor plan: ${err.message}`);
-          setLoading(false);
-        }
-      }
-    };
-
-    renderPDF();
-
-    // Cleanup function
-    return () => {
-      isMounted = false;
-      if (renderTask) {
-        renderTask.cancel();
-      }
-      if (pdfDocument) {
-        pdfDocument.destroy();
-      }
-    };
-  }, [pdfUrl, scale, onRenderComplete, retryCount]);
-
-  // Handle retry
-  const handleRetry = () => {
-    setRetryCount(prev => prev + 1);
-  };
-
-  // Handle fallback to image if needed
-  const handleImageFallback = () => {
-    if (!pdfUrl) return;
-    
-    // Try to use a PNG version of the floor plan instead
-    const imagePath = pdfUrl.replace('.pdf', '.png');
-    alert(`Attempting to load image fallback: ${imagePath}\n\nNote: In a production environment, this would automatically try to load an image version of the floor plan.`);
-  };
-
-  return (
-    <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
-      {/* Loading indicator */}
-      {loading && (
-        <Box 
-          sx={{ 
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            bgcolor: 'rgba(255, 255, 255, 0.8)',
-            zIndex: 10
-          }}
-        >
-          <CircularProgress size={40} sx={{ mb: 2 }} />
-          <Typography>Loading floor plan...</Typography>
-        </Box>
-      )}
-      
-      {/* Error message */}
-      {error && (
-        <Box 
-          sx={{ 
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            p: 2,
-            zIndex: 10
-          }}
-        >
-          <Alert 
-            severity="error" 
-            sx={{ 
-              width: '100%', 
-              display: 'flex', 
-              flexDirection: 'column', 
-              alignItems: 'flex-start'
-            }}
-          >
-            <Typography paragraph>{error}</Typography>
-            <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
-              <Button 
-                variant="outlined" 
-                size="small" 
-                onClick={handleRetry}
-                startIcon={<RefreshIcon />}
-              >
-                Try Again
-              </Button>
-              <Button 
-                variant="outlined" 
-                size="small" 
-                onClick={handleImageFallback}
-                startIcon={<ImageSearchIcon />}
-              >
-                Try Image Fallback
-              </Button>
-            </Box>
-          </Alert>
-        </Box>
-      )}
-      
-      {/* PDF Canvas */}
-      <canvas 
-        ref={canvasRef} 
-        style={{ 
-          display: loading ? 'none' : 'block'
-        }}
-      />
-    </Box>
-  );
 };
 
 function EnhancedRoomVisualizer() {
@@ -1313,18 +1238,18 @@ function EnhancedRoomVisualizer() {
 // Floor plan paths
 const floorPlans = {
   "Max Lowenthal Hall": {
-    "1st Floor": "/images/floor-plans/12-MAX-LOWENTHAL-HALL-1ST-FLOOR.pdf",
-    "2nd Floor": "/images/floor-plans/12-MAX-LOWENTHAL-HALL-2ND-FLOOR.pdf",
-    "3rd Floor": "/images/floor-plans/12-MAX-LOWENTHAL-HALL-3RD-FLOOR.pdf",
-    "4th Floor": "/images/floor-plans/12-MAX-LOWENTHAL-HALL-4TH-FLOOR.pdf",
-    "A-Level": "/images/floor-plans/12-MAX-LOWENTHAL-HALL-A-LEVEL.pdf"
+    "1st Floor": "/images/LOW-1.pdf",
+    "2nd Floor": "/images/LOW-2.pdf",
+    "3rd Floor": "/images/LOW-3.pdf",
+    "4th Floor": "/images/LOW-4.pdf",
+    "A-Level": "/images/LOW-A.pdf"
   },
   "Wallace Library": {
-    "1st Floor": "/images/floor-plans/05-WALLACE-LIBRARY-1ST-FLOOR.pdf",
-    "2nd Floor": "/images/floor-plans/05-WALLACE-LIBRARY-2ND-FLOOR.pdf",
-    "3rd Floor": "/images/floor-plans/05-WALLACE-LIBRARY-3RD-FLOOR.pdf",
-    "4th Floor": "/images/floor-plans/05-WALLACE-LIBRARY-4TH-FLOOR.pdf",
-    "A-Level": "/images/floor-plans/05-WALLACE-LIBRARY-A-LEVEL.pdf"
+    "1st Floor": "/images/WAL-1.pdf",
+    "2nd Floor": "/images/WAL-2.pdf",
+    "3rd Floor": "/images/WAL-3.pdf",
+    "4th Floor": "/images/WAL-4.pdf",
+    "A-Level": "/images/WAL-A.pdf"
   }
 };
 

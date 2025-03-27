@@ -1,11 +1,19 @@
 // src/components/rooms/PDFViewer.js - A dedicated component for rendering PDFs with interactive overlays
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, CircularProgress, Typography, Alert } from '@mui/material';
+import { 
+  Box, 
+  CircularProgress, 
+  Typography, 
+  Alert,
+  Button  // Add this import
+} from '@mui/material';
 import * as pdfjs from 'pdfjs-dist';
 
 // Set worker path
 const pdfjsWorker = process.env.PUBLIC_URL + '/pdf.worker.min.js';
 pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+
+// Rest of the component code...
 
 const PDFViewer = ({ pdfPath, scale = 1, onRenderComplete, roomOverlays = [], onRoomClick }) => {
   const canvasRef = useRef(null);
