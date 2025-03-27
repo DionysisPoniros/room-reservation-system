@@ -1,9 +1,8 @@
-// src/components/rooms/InteractiveFloorMap.js
+// src/components/rooms/UpdatedInteractiveFloorMap.js
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Box, 
   Typography, 
-  Paper, 
   IconButton,
   Tooltip,
   CircularProgress,
@@ -13,13 +12,20 @@ import {
 } from '@mui/material';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 
-// Import Icons
+// Import our custom RoomOverlay component
+import RoomOverlay from './RoomOverlay';
+
+// Import room overlay data
+import { roomOverlays } from '../../data/roomOverlays';
+
+// Icons
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import MeetingRoomIcon from '@mui/icons-material/MeetingRoom';
 
+// Map config with floor plan paths
 const FLOOR_PLANS = {
   "Max Lowenthal Hall": {
     "1st Floor": "/images/floor-plans/LOW-1.svg",
@@ -37,30 +43,11 @@ const FLOOR_PLANS = {
   }
 };
 
-// Room overlay data - defines where rooms are on each floor
-const ROOM_OVERLAYS = {
-  "Max Lowenthal Hall": {
-    "1st Floor": {
-      "LOW-1050": {  },
-      "LOW-1060": { },
-      // Add more rooms here
-    }
-    // Add more floors here
-  },
-  "Wallace Library": {
-    "1st Floor": {
-      "WAL-1545": {},
-      "WAL-1624": {  },
-      // Add more rooms here
-    }
-    // Add more floors here
-  }
-};
-
 /**
- * Interactive Floor Map Component
+ * Updated Interactive Floor Map Component
+ * Displays SVG floor plans with room overlays
  */
-const InteractiveFloorMap = ({ 
+const UpdatedInteractiveFloorMap = ({ 
   building = "Max Lowenthal Hall", 
   floor = "1st Floor",
   onBuildingChange,
@@ -156,81 +143,45 @@ const InteractiveFloorMap = ({
   }, [reservations]);
   
   // Handle room click
-  const handleRoomClick = useCallback((roomId) => {
-    if (!roomId) return;
+  const handleRoomClick = useCallback((roomData) => {
+    if (!roomData) return;
     
-    setSelectedRoom(roomId);
+    setSelectedRoom(roomData);
     
     // Notify parent component
     if (onRoomSelect) {
-      onRoomSelect(roomId);
+      onRoomSelect(roomData.id || roomData.name);
     }
   }, [onRoomSelect]);
   
-  // Render room overlays
-  const renderRoomOverlays = useCallback(() => {
-    if (!ROOM_OVERLAYS[building] || !ROOM_OVERLAYS[building][floor]) {
-      return null;
+  // Get room overlays for the current building and floor
+  const getRoomOverlays = useCallback(() => {
+    // Check if we have overlay data for this building and floor
+    if (!roomOverlays[building] || !roomOverlays[building][floor]) {
+      console.log(`No room overlays found for ${building}, ${floor}`);
+      return [];
     }
     
-    return Object.entries(ROOM_OVERLAYS[building][floor]).map(([roomId, roomData]) => {
-      const isOccupied = isRoomOccupied(roomId);
-      const isSelected = selectedRoom === roomId;
-      const isHovered = hoveredRoom === roomId;
+    const overlays = roomOverlays[building][floor];
+    const result = [];
+    
+    // Convert overlays object to array with room data
+    Object.keys(overlays).forEach(roomId => {
+      const overlay = overlays[roomId];
       
-      // Room colors based on state
-      const baseColor = isOccupied ? 'rgba(244, 67, 54, 0.5)' : 'rgba(76, 175, 80, 0.5)';
-      const hoverColor = isOccupied ? 'rgba(244, 67, 54, 0.7)' : 'rgba(76, 175, 80, 0.7)';
-      const selectedColor = isOccupied ? 'rgba(244, 67, 54, 0.9)' : 'rgba(76, 175, 80, 0.9)';
+      // Find room data from the rooms prop
+      const roomData = rooms.find(r => r.id === roomId || r.name === roomId);
       
-      const color = isSelected ? selectedColor : (isHovered ? hoverColor : baseColor);
-      const borderWidth = isSelected ? 3 : (isHovered ? 2 : 1);
-      
-      return (
-        <g key={roomId}>
-          <rect
-            x={roomData.x}
-            y={roomData.y}
-            width={roomData.width}
-            height={roomData.height}
-            fill={color}
-            stroke="rgba(0, 0, 0, 0.4)"
-            strokeWidth={borderWidth}
-            rx={5}
-            ry={5}
-            style={{ 
-              cursor: 'pointer',
-              transition: 'all 0.2s ease-in-out',
-            }}
-            onClick={() => handleRoomClick(roomId)}
-            onMouseEnter={() => setHoveredRoom(roomId)}
-            onMouseLeave={() => setHoveredRoom(null)}
-          />
-          
-          {/* Room label - show for larger rooms */}
-          {roomData.width > 60 && roomData.height > 30 && (
-            <text
-              x={roomData.x + roomData.width / 2}
-              y={roomData.y + roomData.height / 2}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              fill="white"
-              fontSize="10"
-              fontWeight="bold"
-              style={{ 
-                pointerEvents: 'none',
-                textShadow: '1px 1px 2px rgba(0,0,0,0.7)',
-              }}
-            >
-              {roomData.label || roomId}
-            </text>
-          )}
-          
-          <title>{`${roomData.label || roomId} (${isOccupied ? 'Occupied' : 'Available'})`}</title>
-        </g>
-      );
+      result.push({
+        id: roomId,
+        name: roomId,
+        ...overlay,
+        roomData: roomData || { name: roomId }
+      });
     });
-  }, [building, floor, hoveredRoom, selectedRoom, isRoomOccupied, handleRoomClick]);
+    
+    return result;
+  }, [building, floor, rooms]);
   
   // Fallback content when SVG is not loaded
   if (loading) {
@@ -249,9 +200,11 @@ const InteractiveFloorMap = ({
     );
   }
   
+  // Get room overlays
+  const roomOverlayData = getRoomOverlays();
+  
   return (
-    <Paper sx={{ p: 2, position: 'relative', height: 600, overflow: 'hidden' }}>
-      {/* Map Content */}
+    <Box sx={{ position: 'relative', height: 600, overflow: 'hidden', border: '1px solid #e0e0e0', borderRadius: 1 }}>
       {svgLoaded ? (
         <TransformWrapper
           initialScale={1}
@@ -264,7 +217,7 @@ const InteractiveFloorMap = ({
         >
           {({ zoomIn, zoomOut, resetTransform }) => (
             <>
-              {/* Map Controls - Using reference to parent TransformWrapper */}
+              {/* Map Controls */}
               <Box sx={{ 
                 position: 'absolute', 
                 top: 10, 
@@ -333,22 +286,19 @@ const InteractiveFloorMap = ({
                   )}
                   
                   {/* Room Overlays */}
-                  <svg 
-                    width="100%" 
-                    height="100%" 
-                    style={{ 
-                      position: 'absolute', 
-                      top: 0, 
-                      left: 0, 
-                      pointerEvents: 'none',
-                      zIndex: 5
-                    }}
-                    aria-label="Room overlays"
-                  >
-                    <g style={{ pointerEvents: 'all' }}>
-                      {renderRoomOverlays()}
-                    </g>
-                  </svg>
+                  {roomOverlayData.map((overlay) => (
+                    <RoomOverlay
+                      key={overlay.id}
+                      room={overlay.roomData}
+                      x={overlay.x}
+                      y={overlay.y}
+                      width={overlay.width}
+                      height={overlay.height}
+                      label={overlay.label || overlay.name || overlay.id}
+                      isOccupied={isRoomOccupied(overlay.id)}
+                      onClick={() => handleRoomClick(overlay.roomData)}
+                    />
+                  ))}
                 </Box>
               </TransformComponent>
             </>
@@ -418,8 +368,51 @@ const InteractiveFloorMap = ({
           sx={{ bgcolor: 'rgba(244, 67, 54, 0.7)', color: 'white' }} 
         />
       </Box>
-    </Paper>
+      
+      {/* Room Count */}
+      {roomOverlayData.length > 0 && (
+        <Box sx={{ 
+          position: 'absolute', 
+          top: 10, 
+          left: 10, 
+          zIndex: 10,
+          display: 'flex',
+          alignItems: 'center',
+          bgcolor: 'rgba(255, 255, 255, 0.7)',
+          p: 1,
+          borderRadius: 1,
+          boxShadow: 1
+        }}>
+          <Typography variant="body2">
+            {roomOverlayData.length} rooms mapped
+          </Typography>
+        </Box>
+      )}
+      
+      {/* When no rooms are mapped yet */}
+      {roomOverlayData.length === 0 && !loading && !error && (
+        <Box sx={{ 
+          position: 'absolute', 
+          top: '50%', 
+          left: '50%', 
+          transform: 'translate(-50%, -50%)',
+          zIndex: 5,
+          bgcolor: 'rgba(255, 255, 255, 0.8)',
+          p: 2,
+          borderRadius: 1,
+          boxShadow: 1,
+          textAlign: 'center'
+        }}>
+          <Typography variant="subtitle1" gutterBottom>
+            No room data available for this floor
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Use the Room Mapping Tool to add rooms to this floor plan
+          </Typography>
+        </Box>
+      )}
+    </Box>
   );
 };
 
-export default InteractiveFloorMap;
+export default UpdatedInteractiveFloorMap;

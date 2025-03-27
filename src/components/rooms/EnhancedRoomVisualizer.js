@@ -21,7 +21,7 @@ import {
 import { Link } from 'react-router-dom';
 
 // Import your new InteractiveFloorMap component
-import InteractiveFloorMap from './InteractiveFloorMap';
+import InteractiveFloorMap from './UpdatedInteractiveFloorMap';
 
 // Import other components and services
 import { getRooms, getRoomReservations, getRoom } from '../../services/roomService';

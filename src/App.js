@@ -17,7 +17,7 @@ import Login from './components/auth/Login';
 import AdminPage from './pages/AdminPage';
 import PrivateRoute from './components/auth/PrivateRoute';
 import { AuthProvider } from './contexts/AuthContext';
-
+import EnhancedSVGInspector from './utils/EnhancedSVGInspector';
 
 function App() {
   return (
@@ -44,6 +44,11 @@ function App() {
               <Route path="/admin" element={
                 <PrivateRoute>
                   <AdminPage />
+                </PrivateRoute>
+              } />
+              <Route path="/admin/svg-inspector" element={
+                <PrivateRoute>
+                  <EnhancedSVGInspector />
                 </PrivateRoute>
               } />
               <Route path="/login" element={<Login />} />
