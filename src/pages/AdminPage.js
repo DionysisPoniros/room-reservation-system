@@ -25,7 +25,7 @@ import { getDashboardSummary } from '../services/analyticsService';
 // Admin Components
 import AdminRoomLoader from '../components/admin/AdminRoomLoader';
 import AdminAnalytics from '../components/admin/AdminAnalytics';
-
+import EnhancedSVGInspector from '../utils/EnhancedSVGInspector';
 // Icons
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import BarChartIcon from '@mui/icons-material/BarChart';
@@ -37,6 +37,7 @@ import PeopleIcon from '@mui/icons-material/People';
 import EventIcon from '@mui/icons-material/Event';
 import HourRequestsManager from '../components/admin/HourRequestsManager';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import MapIcon from '@mui/icons-material/Map';
 
 function AdminPage() {
   const { currentUser } = useAuth();
@@ -352,6 +353,15 @@ function AdminPage() {
             } 
             id="tab-4" 
           />
+          <Tab 
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <MapIcon sx={{ mr: 1 }} fontSize="small" />
+                SVG Mapping
+              </Box>
+            } 
+            id="tab-5" 
+          />
           </Tabs>
         </Box>
         
@@ -369,6 +379,9 @@ function AdminPage() {
         </Box>
         <Box role="tabpanel" hidden={activeTab !== 4}>
           {activeTab === 4 && <HourRequestsManager />}
+        </Box>
+        <Box role="tabpanel" hidden={activeTab !== 5}>
+          {activeTab === 5 && <EnhancedSVGInspector />}
         </Box>
         <Box role="tabpanel" hidden={activeTab !== 3}>
           {activeTab === 3 && (
