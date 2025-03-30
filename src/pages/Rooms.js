@@ -543,6 +543,7 @@ function Rooms() {
             </>
           )}
           
+          
           {viewMode === 'map' && (
             <>
               <Typography variant="h5" sx={{ mb: 2 }}>
@@ -552,7 +553,10 @@ function Rooms() {
               {roomsLoading ? (
                 renderLoadingPlaceholders
               ) : (
-                <EnhancedRoomVisualizer />  // Use the correct component name
+                <EnhancedRoomVisualizer 
+                  rooms={rooms}
+                  reservations={reservations}
+                />
               )}
             </>
           )}

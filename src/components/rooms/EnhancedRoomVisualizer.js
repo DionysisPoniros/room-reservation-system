@@ -1,4 +1,4 @@
-// src/components/rooms/EnhancedRoomVisualizer.js
+// Updated EnhancedRoomVisualizer.js with improved room interaction and time slider
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Box, 
@@ -72,17 +72,25 @@ const BUSINESS_HOURS = Array.from({ length: 17 }, (_, i) => i + 7);
  * Enhanced Interactive Floor Map Component
  * Shows room availability by time of day with interactive selection
  */
-const EnhancedRoomVisualizer = () => {
+const EnhancedRoomVisualizer = ({ 
+  building = "Max Lowenthal Hall", 
+  floor = "1st Floor",
+  onBuildingChange,
+  onFloorChange,
+  onRoomSelect,
+  rooms = [],
+  reservations = {}
+}) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
   // Building and floor state
-  const [building, setBuilding] = useState("Max Lowenthal Hall");
-  const [floor, setFloor] = useState("1st Floor");
+  const [selectedBuilding, setSelectedBuilding] = useState(building);
+  const [selectedFloor, setSelectedFloor] = useState(floor);
   
   // Room and reservation data
-  const [rooms, setRooms] = useState([]);
-  const [reservations, setReservations] = useState({});
+  const [roomsData, setRoomsData] = useState([]);
+  const [reservationsData, setReservationsData] = useState({});
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [selectedRoomData, setSelectedRoomData] = useState(null);
   const [selectedRoomReservations, setSelectedRoomReservations] = useState([]);
@@ -118,10 +126,10 @@ const EnhancedRoomVisualizer = () => {
         setSvgLoaded(false);
         
         // Get the SVG URL for the current building and floor
-        const svgUrl = FLOOR_PLANS[building]?.[floor];
+        const svgUrl = FLOOR_PLANS[selectedBuilding]?.[selectedFloor];
         
         if (!svgUrl) {
-          throw new Error(`No floor plan found for ${building}, ${floor}`);
+          throw new Error(`No floor plan found for ${selectedBuilding}, ${selectedFloor}`);
         }
         
         // Fetch the SVG content
@@ -159,105 +167,123 @@ const EnhancedRoomVisualizer = () => {
     return () => {
       isMounted = false;
     };
-  }, [building, floor]);
+  }, [selectedBuilding, selectedFloor]);
   
-  // Fetch rooms for the current building
+  // Fetch rooms and reservations data
   useEffect(() => {
-    const fetchRooms = async () => {
+    const fetchData = async () => {
       try {
-        // In a real implementation, you would fetch rooms from the database
-        // For now, let's use the room IDs from the overlay data
-        const roomOverlayData = roomOverlays[building]?.[floor] || {};
-        const roomIds = Object.keys(roomOverlayData);
+        // Get room overlay data for the selected building and floor
+        const overlayRooms = roomOverlays[selectedBuilding]?.[selectedFloor] || {};
         
-        // Array to store room data
-        const roomsData = [];
+        // Fetch detailed room information for each room in the overlay
+        const detailedRooms = [];
         
-        // Fetch each room's data
-        for (const roomId of roomIds) {
+        for (const roomId in overlayRooms) {
           try {
-            // For now, we'll just use the overlay data and add placeholders
-            // In a real app, you would fetch this from the database
-            const roomData = {
-              id: roomId,
-              name: roomId,
-              type: "Room",
-              capacity: 10,
-              building: building,
-              location: `${building}, ${floor}`,
-              equipment: [],
-              ...roomOverlayData[roomId]
-            };
+            // Try to fetch room from database
+            const roomData = await getRoom(roomId);
             
-            roomsData.push(roomData);
-          } catch (roomError) {
-            console.error(`Error fetching room ${roomId}:`, roomError);
+            if (roomData) {
+              // If room found, add it to the list with overlay position data
+              detailedRooms.push({
+                ...roomData,
+                ...overlayRooms[roomId]
+              });
+            } else {
+              // If room not found, use overlay data as fallback
+              detailedRooms.push({
+                id: roomId,
+                name: roomId,
+                label: overlayRooms[roomId].label || roomId,
+                ...overlayRooms[roomId],
+                capacity: 10, // Placeholder
+                type: "Room", // Placeholder
+                building: selectedBuilding,
+                location: `${selectedBuilding}, ${selectedFloor}`,
+                equipment: ["Whiteboard"] // Placeholder
+              });
+            }
+          } catch (roomErr) {
+            console.error(`Error fetching room ${roomId}:`, roomErr);
           }
         }
         
-        setRooms(roomsData);
-      } catch (err) {
-        console.error("Error fetching rooms:", err);
-        setError("Failed to load room data");
-      }
-    };
-    
-    if (building && floor) {
-      fetchRooms();
-    }
-  }, [building, floor]);
-  
-  // Fetch room data when a room is selected
-  useEffect(() => {
-    const fetchRoomData = async () => {
-      if (!selectedRoom) return;
-      
-      try {
-        // Get detailed room data
-        const roomData = await getRoom(selectedRoom);
-        setSelectedRoomData(roomData);
+        setRoomsData(detailedRooms);
         
-        // Get reservations for this room
-        const roomReservations = await getRoomReservations(selectedRoom);
-        setSelectedRoomReservations(roomReservations);
-      } catch (err) {
-        console.error("Error fetching selected room data:", err);
-        // If we can't fetch the room from the database, use the overlay data
-        // with placeholder details
-        const roomOverlay = roomOverlays[building]?.[floor]?.[selectedRoom];
-        if (roomOverlay) {
-          setSelectedRoomData({
-            id: selectedRoom,
-            name: roomOverlay.label || selectedRoom,
-            capacity: 10, // Placeholder
-            location: `${building}, ${floor}`,
-            type: "Room", // Placeholder
-            building,
-            equipment: ["Whiteboard"] // Placeholder
-          });
+        // Fetch reservations for all rooms on this floor for today
+        const startOfDay = new Date(selectedDate);
+        startOfDay.setHours(0, 0, 0, 0);
+        
+        const endOfDay = new Date(selectedDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        
+        const reservationsByRoom = {};
+        
+        for (const room of detailedRooms) {
+          try {
+            const roomReservations = await getRoomReservations(room.id);
+            
+            // Filter to only include today's reservations
+            const todayReservations = roomReservations.filter(res => {
+              const resDate = new Date(res.startTime.seconds * 1000);
+              return resDate >= startOfDay && resDate <= endOfDay;
+            });
+            
+            reservationsByRoom[room.id] = todayReservations;
+          } catch (resErr) {
+            console.error(`Error fetching reservations for room ${room.id}:`, resErr);
+            reservationsByRoom[room.id] = [];
+          }
         }
+        
+        setReservationsData(reservationsByRoom);
+        setLoading(false);
+        
+      } catch (err) {
+        console.error("Error fetching data:", err);
+        setError("Failed to load room and reservation data");
+        setLoading(false);
       }
     };
     
-    fetchRoomData();
-  }, [selectedRoom, building, floor]);
+    if (svgLoaded) {
+      fetchData();
+    }
+  }, [selectedBuilding, selectedFloor, selectedDate, svgLoaded]);
   
   // Handle room click
-  const handleRoomClick = useCallback((roomId) => {
+  const handleRoomClick = useCallback(async (roomId) => {
     console.log("Room clicked:", roomId);
-    setSelectedRoom(roomId);
-    setDrawerOpen(true);
-  }, []);
-  
+    
+    // Find the room data from roomsData
+    const room = roomsData.find(r => r.id === roomId);
+    
+    if (room) {
+      setSelectedRoom(roomId);
+      setSelectedRoomData(room);
+      
+      // Set reservations for this room
+      const roomReservations = reservationsData[roomId] || [];
+      setSelectedRoomReservations(roomReservations);
+      
+      // Open drawer with room details
+      setDrawerOpen(true);
+    } else {
+      console.error(`Room information for ${roomId} not found in database`);
+      setError(`Room information for ${roomId} not found in database`);
+    }
+  }, [roomsData, reservationsData]);
+
   // Check if a room is occupied at the selected hour
   const isRoomOccupiedAtHour = useCallback((roomId) => {
-    if (!reservations[roomId]) return false;
+    if (!reservationsData[roomId]) return false;
     
     // Set the selected hour to the selected date
     const selectedDateTime = new Date(selectedDate);
     selectedDateTime.setHours(selectedHour, 0, 0, 0);
     
-    return reservations[roomId].some(reservation => {
+    return reservationsData[roomId].some(reservation => {
       if (reservation.status === 'cancelled') return false;
       
       const startTime = new Date(reservation.startTime.seconds * 1000);
@@ -266,53 +292,48 @@ const EnhancedRoomVisualizer = () => {
       // Check if the selected hour falls within the reservation time range
       return selectedDateTime >= startTime && selectedDateTime < endTime;
     });
-  }, [reservations, selectedDate, selectedHour]);
+  }, [reservationsData, selectedDate, selectedHour]);
 
   // Get room overlays for the current building and floor
   const getRoomOverlaysData = useCallback(() => {
-    // Check if we have overlay data for this building and floor
-    if (!roomOverlays[building] || !roomOverlays[building][floor]) {
-      return [];
-    }
-    
-    const overlays = roomOverlays[building][floor];
-    const result = [];
-    
-    // Convert overlays object to array with room data and occupation status
-    Object.keys(overlays).forEach(roomId => {
-      const overlay = overlays[roomId];
-      
-      result.push({
-        id: roomId,
-        name: roomId,
-        label: overlay.label || roomId,
-        x: overlay.x,
-        y: overlay.y,
-        width: overlay.width,
-        height: overlay.height,
-        isOccupied: isRoomOccupiedAtHour(roomId)
-      });
-    });
-    
-    return result;
-  }, [building, floor, isRoomOccupiedAtHour]);
+    return roomsData.map(room => ({
+      id: room.id,
+      name: room.name,
+      label: room.label || room.name,
+      x: room.x,
+      y: room.y,
+      width: room.width,
+      height: room.height,
+      roomData: room,
+      isOccupied: isRoomOccupiedAtHour(room.id)
+    }));
+  }, [roomsData, isRoomOccupiedAtHour]);
 
   // Handle hour slider change
   const handleHourChange = (event, newValue) => {
     setSelectedHour(newValue);
   };
 
-  // Handle building/floor change
+  // Handle building change
   const handleBuildingChange = (newBuilding) => {
-    setBuilding(newBuilding);
+    setSelectedBuilding(newBuilding);
     setSelectedRoom(null);
     setDrawerOpen(false);
+    
+    if (onBuildingChange) {
+      onBuildingChange(newBuilding);
+    }
   };
 
+  // Handle floor change
   const handleFloorChange = (newFloor) => {
-    setFloor(newFloor);
+    setSelectedFloor(newFloor);
     setSelectedRoom(null);
     setDrawerOpen(false);
+    
+    if (onFloorChange) {
+      onFloorChange(newFloor);
+    }
   };
 
   // Format equipment icons
@@ -345,7 +366,7 @@ const EnhancedRoomVisualizer = () => {
     );
   };
 
-  // Room Details Card
+  // Room Details Card Component
   const RoomDetailsCard = () => {
     if (!selectedRoomData) return null;
     
@@ -366,7 +387,7 @@ const EnhancedRoomVisualizer = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
             <LocationOnIcon fontSize="small" color="action" sx={{ mr: 1 }} />
             <Typography variant="body2" color="text.secondary">
-              {selectedRoomData.location || `${building}, ${floor}`}
+              {selectedRoomData.location || `${selectedBuilding}, ${selectedFloor}`}
             </Typography>
           </Box>
           
@@ -445,6 +466,15 @@ const EnhancedRoomVisualizer = () => {
     );
   };
 
+  // Loading state
+  if (loading && !svgContent) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   return (
     <Paper sx={{ p: 3, mb: 3 }}>
       <Typography variant="h5" gutterBottom>
@@ -468,7 +498,7 @@ const EnhancedRoomVisualizer = () => {
           <Chip
             key={buildingName}
             label={buildingName}
-            color={building === buildingName ? "primary" : "default"}
+            color={selectedBuilding === buildingName ? "primary" : "default"}
             onClick={() => handleBuildingChange(buildingName)}
             sx={{ mb: 1 }}
           />
@@ -476,11 +506,11 @@ const EnhancedRoomVisualizer = () => {
       </Box>
       
       <Box sx={{ mb: 3, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-        {FLOOR_PLANS[building] && Object.keys(FLOOR_PLANS[building]).map(floorName => (
+        {FLOOR_PLANS[selectedBuilding] && Object.keys(FLOOR_PLANS[selectedBuilding]).map(floorName => (
           <Chip
             key={floorName}
             label={floorName}
-            color={floor === floorName ? "primary" : "default"}
+            color={selectedFloor === floorName ? "primary" : "default"}
             onClick={() => handleFloorChange(floorName)}
           />
         ))}
@@ -629,7 +659,7 @@ const EnhancedRoomVisualizer = () => {
                     {svgContent && getRoomOverlaysData().map((overlay) => (
                       <RoomOverlay
                         key={overlay.id}
-                        room={overlay}
+                        room={overlay.roomData}
                         x={overlay.x}
                         y={overlay.y}
                         width={overlay.width}
@@ -668,7 +698,7 @@ const EnhancedRoomVisualizer = () => {
         }}>
           <LocationOnIcon fontSize="small" color="primary" />
           <Typography variant="body2">
-            {building}, {floor}
+            {selectedBuilding}, {selectedFloor}
           </Typography>
         </Box>
       </Box>
