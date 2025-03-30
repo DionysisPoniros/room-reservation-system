@@ -34,7 +34,17 @@ import {
   checkRoomAvailability, 
   getUserDailyBookings 
 } from '../../services/roomService';
-
+import { 
+  Autocomplete, 
+  Stack,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  Avatar
+} from '@mui/material';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import { collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { db } from '../../firebase/config';
 // Icons - you can add these if you want to enhance the UI further
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
@@ -69,6 +79,10 @@ function BookingForm() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [operationLoading, setOperationLoading] = useState(false);
 
+  const [invitedUsers, setInvitedUsers] = useState([]);
+  const [userQuery, setUserQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchingUsers, setSearchingUsers] = useState(false);
   
   // Function to round time to the nearest hour
   function roundToHour(date) {
@@ -158,11 +172,23 @@ function BookingForm() {
     fetchRoomAndUserData();
   }, [id, currentUser]); // Only depend on id and currentUser, not time-related states
 
+  
   // Update end time when start time or duration changes
   useEffect(() => {
     const newEndTime = addHours(startTime, duration);
     setEndTime(newEndTime);
   }, [startTime, duration]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (userQuery) {
+        searchUsers(userQuery);
+      }
+    }, 500); // Debounce search
+    
+    return () => clearTimeout(timer);
+  }, [userQuery]);
+  
 
   // Handle duration slider change
   const handleDurationChange = (event, newValue) => {
@@ -199,6 +225,63 @@ function BookingForm() {
       console.error("Error updating start time:", err);
     }
   };
+
+  const searchUsers = async (searchQuery) => {
+    if (!searchQuery || searchQuery.length < 3) {
+      setSearchResults([]);
+      return;
+    }
+    
+    try {
+      setSearchingUsers(true);
+      
+      // Query Firebase for users with email starting with the search query
+      // Note: This requires an index on the 'email' field
+      const usersRef = collection(db, 'users');
+      const q = query(
+        usersRef,
+        where('email', '>=', searchQuery),
+        where('email', '<=', searchQuery + '\uf8ff'),
+        limit(5)
+      );
+      
+      const snapshot = await getDocs(q);
+      
+      // Filter out the current user
+      const users = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(user => user.email !== currentUser.email);
+      
+      setSearchResults(users);
+    } catch (err) {
+      console.error("Error searching users:", err);
+    } finally {
+      setSearchingUsers(false);
+    }
+  };
+
+  const handleAddUser = (user) => {
+    // Check if user is already invited
+    if (!invitedUsers.some(u => u.id === user.id)) {
+      // Check if maximum occupancy would be exceeded
+      if (invitedUsers.length + 1 >= room.capacity) {
+        setError(`Cannot invite more users. Room capacity is ${room.capacity} people.`);
+        return;
+      }
+      
+      setInvitedUsers([...invitedUsers, user]);
+    }
+    
+    // Clear search
+    setUserQuery('');
+    setSearchResults([]);
+  };
+  
+  const handleRemoveUser = (userId) => {
+    setInvitedUsers(invitedUsers.filter(user => user.id !== userId));
+  };
+
+  // Add this function to handle removing a user from invites
 
   // Daily Booking Display Component
   const DailyBookingDisplay = () => {
@@ -306,7 +389,14 @@ function BookingForm() {
       // Continue with the rest of your existing code...
       
       console.log("Room is available, creating reservation...");
-      
+      let collaborators = [];
+      if (invitedUsers.length > 0) {
+        collaborators = invitedUsers.map(user => ({
+          userId: user.id,
+          email: user.email,
+          status: 'pending' // Status can be 'pending', 'accepted', 'declined'
+        }));
+      }
       // Create reservation with a cleaner structure
       const reservationData = {
         roomId: id,
@@ -317,10 +407,12 @@ function BookingForm() {
         purpose: purpose.trim(),
         attendees: attendees,
         status: 'confirmed',
-        durationHours: duration, // Add duration for easier tracking
+        durationHours: duration,
+        collaborators: collaborators, // Add this line
         createdAt: new Date()
       };
       
+
       // Create the reservation
       const docRef = await createReservation(reservationData);
       console.log("Reservation created successfully with ID:", docRef.id);
@@ -522,7 +614,82 @@ function BookingForm() {
                   </Select>
                 </FormControl>
               </Grid>
-              
+              {/* Invited Users Section */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Invite Other Users (Optional)
+                </Typography>
+                <Autocomplete
+                  freeSolo
+                  options={searchResults}
+                  getOptionLabel={(option) => typeof option === 'string' ? option : option.email}
+                  loading={searchingUsers}
+                  inputValue={userQuery}
+                  onInputChange={(event, newValue) => setUserQuery(newValue)}
+                  onChange={(event, value) => {
+                    if (value && typeof value !== 'string') {
+                      handleAddUser(value);
+                    }
+                  }}
+                  filterOptions={(options) => options}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Search users by email"
+                      variant="outlined"
+                      InputProps={{
+                        ...params.InputProps,
+                        startAdornment: (
+                          <>  
+                            <InputAdornment position="start">
+                              <PersonAddIcon color="action" />
+                            </InputAdornment>
+                            {params.InputProps.startAdornment}
+                          </>
+                        ),
+                        endAdornment: (
+                          <>
+                            {searchingUsers ? <CircularProgress color="inherit" size={20} /> : null}
+                            {params.InputProps.endAdornment}
+                          </>
+                        ),
+                      }}
+                      helperText="Type at least 3 characters to search"
+                    />
+                  )}
+                  renderOption={(props, option) => (
+                    <ListItem {...props}>
+                      <ListItemIcon>
+                        <Avatar>{option.email.charAt(0).toUpperCase()}</Avatar>
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary={option.email} 
+                        secondary={option.displayName || 'User'}
+                      />
+                    </ListItem>
+                  )}
+                />
+                
+                {/* Display invited users */}
+                {invitedUsers.length > 0 && (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Invited Users ({invitedUsers.length})
+                    </Typography>
+                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                      {invitedUsers.map((user) => (
+                        <Chip
+                          key={user.id}
+                          avatar={<Avatar>{user.email.charAt(0).toUpperCase()}</Avatar>}
+                          label={user.email}
+                          onDelete={() => handleRemoveUser(user.id)}
+                          sx={{ my: 0.5 }}
+                        />
+                      ))}
+                    </Stack>
+                  </Box>
+                )}
+              </Grid>
               {/* Error Message Display */}
               {error && (
                 <Grid item xs={12}>

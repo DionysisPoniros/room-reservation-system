@@ -121,18 +121,24 @@ const EnhancedRoomVisualizer = ({
   };
   const isTimeInPast = useCallback((date, hour) => {
     const now = new Date();
+    const currentHour = now.getHours();
     const selectedDate = new Date(date);
     
+    // Create copies for date comparison without modifying original dates
+    const todayMidnight = new Date(now);
+    todayMidnight.setHours(0, 0, 0, 0);
+    
+    const selectedMidnight = new Date(selectedDate);
+    selectedMidnight.setHours(0, 0, 0, 0);
+    
     // If the date is in the past, return true
-    if (selectedDate.setHours(0, 0, 0, 0) < now.setHours(0, 0, 0, 0)) {
+    if (selectedMidnight < todayMidnight) {
       return true;
     }
     
     // If it's today, check if the hour is in the past
-    if (selectedDate.getDate() === now.getDate() && 
-        selectedDate.getMonth() === now.getMonth() && 
-        selectedDate.getFullYear() === now.getFullYear()) {
-      return hour < now.getHours();
+    if (selectedMidnight.getTime() === todayMidnight.getTime()) {
+      return hour < currentHour;
     }
     
     return false;

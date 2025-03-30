@@ -38,6 +38,11 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import AddIcon from '@mui/icons-material/Add';
 import RequestHoursForm from '../components/booking/RequestHoursForm';
 import { getUserHourRequests, getUserHourAllowance } from '../services/userService';
+import PeopleIcon from '@mui/icons-material/People';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import ThumbUpIcon from '@mui/icons-material/ThumbUp';
+import ThumbDownIcon from '@mui/icons-material/ThumbDown';
+import { respondToCollaboration } from '../services/roomService';
 
 function MyReservations() {
   const { currentUser } = useAuth();
@@ -66,6 +71,9 @@ function MyReservations() {
   const [dailyLimit, setDailyLimit] = useState(5);
   const [loadingRequests, setLoadingRequests] = useState(false);
 
+  const [invitedReservations, setInvitedReservations] = useState([]);
+  const [respondingToInvite, setRespondingToInvite] = useState(false);
+
   useEffect(() => {
     if (!currentUser) {
       navigate('/login');
@@ -77,21 +85,33 @@ function MyReservations() {
         setLoading(true);
         setError(null);
         
-        // Get all user reservations
+        // Get all user reservations (primary and collaborative)
         const reservationsData = await getUserReservations(currentUser.uid);
         
-        // Fetch room details for each reservation
-        const reservationsWithRooms = await Promise.all(
-          reservationsData.map(async (reservation) => {
-            const roomData = await getRoom(reservation.roomId);
-            return { ...reservation, room: roomData };
-          })
-        );
+        // Separate into owned and invited reservations
+        const ownedReservations = reservationsData.filter(res => res.isPrimaryBooker);
+        const invited = reservationsData.filter(res => !res.isPrimaryBooker);
         
-        // Sort by start time (most recent first)
-        reservationsWithRooms.sort((a, b) => b.startTime.seconds - a.startTime.seconds);
+        // Fetch room details for each reservation
+        const processReservations = async (reservationsList) => {
+          return await Promise.all(
+            reservationsList.map(async (reservation) => {
+              try {
+                const roomData = await getRoom(reservation.roomId);
+                return { ...reservation, room: roomData };
+              } catch (err) {
+                console.error(`Error fetching room for reservation ${reservation.id}:`, err);
+                return reservation;
+              }
+            })
+          );
+        };
+        
+        const reservationsWithRooms = await processReservations(ownedReservations);
+        const invitedWithRooms = await processReservations(invited);
         
         setReservations(reservationsWithRooms);
+        setInvitedReservations(invitedWithRooms);
         
         // Get today's bookings
         const today = new Date();
@@ -138,6 +158,24 @@ function MyReservations() {
     fetchReservations();
   }, [currentUser, navigate, refreshTrigger]);
 
+
+  const handleRespondToInvite = async (reservationId, response) => {
+    try {
+      setRespondingToInvite(true);
+      
+      await respondToCollaboration(reservationId, currentUser.uid, response);
+      
+      // Refresh the reservations
+      setRefreshTrigger(prev => prev + 1);
+      
+      setRespondingToInvite(false);
+    } catch (err) {
+      console.error("Error responding to invitation:", err);
+      setError("Failed to respond to invitation. Please try again.");
+      setRespondingToInvite(false);
+    }
+  };
+  
   const handleCancelReservation = async () => {
     if (!selectedReservation) return;
     
@@ -522,6 +560,28 @@ function MyReservations() {
               </Typography>
             </Box>
           </Box>
+          {reservation.collaborators && reservation.collaborators.length > 0 && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Collaborators
+              </Typography>
+              {reservation.collaborators.map((collab, index) => (
+                <Chip
+                  key={index}
+                  size="small"
+                  label={collab.email}
+                  icon={<PeopleIcon />}
+                  color={
+                    collab.status === 'accepted' ? 'success' :
+                    collab.status === 'declined' ? 'error' :
+                    'default'
+                  }
+                  variant="outlined"
+                  sx={{ mr: 0.5, mb: 0.5 }}
+                />
+              ))}
+            </Box>
+          )}
         </CardContent>
         
         <CardActions sx={{ p: 2, pt: 0 }}>
@@ -605,6 +665,13 @@ function MyReservations() {
                     Past & Cancelled ({pastReservations.length})
                   </Box>} 
                   id="tab-2" 
+                />
+                <Tab 
+                  label={<Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <PersonAddIcon sx={{ mr: 1 }} fontSize="small" />
+                    Invitations ({invitedReservations.length})
+                  </Box>} 
+                  id="tab-3" 
                 />
               </Tabs>
             </Box>
@@ -708,9 +775,133 @@ function MyReservations() {
                 </Grid>
               )}
             </Box>
+            <Box role="tabpanel" hidden={activeTab !== 3}>
+              {activeTab === 3 && (
+                <Grid container spacing={3}>
+                  {invitedReservations.length > 0 ? (
+                    invitedReservations.map((reservation) => (
+                      <Grid item xs={12} md={6} key={reservation.id}>
+                        <Card sx={{ 
+                          height: '100%', 
+                          display: 'flex', 
+                          flexDirection: 'column',
+                          position: 'relative',
+                          border: '2px dashed #f0c14b'
+                        }}>
+                          <Box 
+                            sx={{ 
+                              position: 'absolute', 
+                              top: 12, 
+                              right: 0,
+                              bgcolor: '#f0c14b',
+                              color: 'white',
+                              py: 0.5,
+                              px: 2,
+                              borderRadius: '4px 0 0 4px',
+                              fontWeight: 600,
+                              fontSize: '0.75rem',
+                              zIndex: 1,
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                            }}
+                          >
+                            Invitation
+                          </Box>
+                          
+                          <CardContent sx={{ flexGrow: 1, p: 3 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                              <Typography variant="h6" component="h2">
+                                {reservation.room?.name || 'Unknown Room'}
+                              </Typography>
+                              {getStatusChip(reservation.status)}
+                            </Box>
+                            
+                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                              <LocationOnIcon fontSize="small" color="action" sx={{ mr: 1 }} />
+                              <Typography variant="body2" color="text.secondary" noWrap>
+                                {reservation.room?.location || 'Unknown Location'}
+                              </Typography>
+                            </Box>
+                            
+                            <Divider sx={{ my: 2 }} />
+                            
+                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                              <EventIcon fontSize="small" color="action" sx={{ mr: 1 }} />
+                              <Typography variant="body2">
+                                {formatDate(reservation.startTime)}
+                              </Typography>
+                            </Box>
+                            
+                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                              <AccessTimeIcon fontSize="small" color="action" sx={{ mr: 1 }} />
+                              <Typography variant="body2">
+                                {formatTimeRange(reservation.startTime, reservation.endTime)}
+                              </Typography>
+                            </Box>
+                            
+                            <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 1 }}>
+                              <PeopleIcon fontSize="small" color="action" sx={{ mr: 1, mt: 0.5 }} />
+                              <Box>
+                                <Typography variant="body2">
+                                  Invited by: {reservation.userEmail || 'Unknown'}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                  {reservation.purpose || 'No purpose specified'}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </CardContent>
+                          
+                          <CardActions sx={{ p: 2, pt: 0 }}>
+                            <Button 
+                              size="small" 
+                              color="success" 
+                              onClick={() => handleRespondToInvite(reservation.id, 'accepted')}
+                              startIcon={<ThumbUpIcon />}
+                              disabled={respondingToInvite || reservation.collaborationStatus === 'accepted'}
+                            >
+                              {reservation.collaborationStatus === 'accepted' ? 'Accepted' : 'Accept'}
+                            </Button>
+                            
+                            <Button 
+                              size="small" 
+                              color="error" 
+                              onClick={() => handleRespondToInvite(reservation.id, 'declined')}
+                              startIcon={<ThumbDownIcon />}
+                              disabled={respondingToInvite || reservation.collaborationStatus === 'declined'}
+                            >
+                              {reservation.collaborationStatus === 'declined' ? 'Declined' : 'Decline'}
+                            </Button>
+                            
+                            <Button 
+                              size="small" 
+                              onClick={() => window.location.href = `/rooms/${reservation.roomId}`}
+                              sx={{ ml: 'auto' }}
+                            >
+                              View Room
+                            </Button>
+                          </CardActions>
+                        </Card>
+                      </Grid>
+                    ))
+                  ) : (
+                    <Grid item xs={12}>
+                      <Paper sx={{ p: 3, textAlign: 'center' }}>
+                        <Typography variant="h6" sx={{ mb: 1 }}>
+                          No invitations
+                        </Typography>
+                        <Typography color="textSecondary" sx={{ mb: 2 }}>
+                          You don't have any pending room invitations
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  )}
+                </Grid>
+              )}
+            </Box>
           </>
         )}
       </Box>
+      
       
       {/* Confirmation Dialog */}
       <Dialog

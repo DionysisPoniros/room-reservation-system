@@ -421,20 +421,100 @@ export const getUserDailyBookings = async (userId, startDate, endDate) => {
 // Get reservations for a user
 export const getUserReservations = async (userId) => {
   try {
-    const q = query(
+    // Create an array to store all reservations
+    let allReservations = [];
+    
+    // Query 1: Get reservations where the user is the primary booker
+    const primaryQuery = query(
       reservationsCollection, 
       where("userId", "==", userId),
       orderBy("startTime", "desc")
     );
     
-    const snapshot = await getDocs(q);
-    
-    return snapshot.docs.map(doc => ({
+    const primarySnapshot = await getDocs(primaryQuery);
+    const primaryReservations = primarySnapshot.docs.map(doc => ({
       id: doc.id,
-      ...doc.data()
+      ...doc.data(),
+      isPrimaryBooker: true // Add a flag to indicate this user is the primary booker
     }));
+    
+    allReservations = [...primaryReservations];
+    
+    // Query 2: Get reservations where the user is a collaborator
+    const collaboratorQuery = query(
+      reservationsCollection,
+      where("collaborators", "array-contains", {
+        userId: userId,
+        status: "pending" // You can expand this to include 'accepted' status as well
+      }),
+      orderBy("startTime", "desc")
+    );
+    
+    try {
+      const collaboratorSnapshot = await getDocs(collaboratorQuery);
+      const collaboratorReservations = collaboratorSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        isPrimaryBooker: false, // User is a collaborator, not the primary booker
+        collaborationStatus: "invited" // Status of the collaboration
+      }));
+      
+      allReservations = [...allReservations, ...collaboratorReservations];
+    } catch (err) {
+      // If this query fails, it might be due to missing index or field structure
+      // We can still return the primary reservations
+      console.error("Error fetching collaborative reservations:", err);
+    }
+    
+    // Sort all reservations by start time (most recent first)
+    allReservations.sort((a, b) => {
+      const aTime = a.startTime?.seconds || 0;
+      const bTime = b.startTime?.seconds || 0;
+      return bTime - aTime; // Descending order
+    });
+    
+    return allReservations;
   } catch (error) {
     console.error("Error getting user reservations:", error);
+    throw error;
+  }
+};
+
+
+export const respondToCollaboration = async (reservationId, userId, response) => {
+  try {
+    // Valid responses are: 'accepted', 'declined'
+    if (!['accepted', 'declined'].includes(response)) {
+      throw new Error("Invalid response. Must be 'accepted' or 'declined'");
+    }
+    
+    // Get the reservation
+    const reservationRef = doc(db, 'reservations', reservationId);
+    const reservationSnap = await getDoc(reservationRef);
+    
+    if (!reservationSnap.exists()) {
+      throw new Error("Reservation not found");
+    }
+    
+    const reservationData = reservationSnap.data();
+    
+    // Find the collaborator and update their status
+    const updatedCollaborators = (reservationData.collaborators || []).map(collab => {
+      if (collab.userId === userId) {
+        return { ...collab, status: response };
+      }
+      return collab;
+    });
+    
+    // Update the reservation with the new collaborator statuses
+    await updateDoc(reservationRef, {
+      collaborators: updatedCollaborators,
+      updatedAt: Timestamp.now()
+    });
+    
+    return { success: true };
+  } catch (error) {
+    console.error("Error responding to collaboration:", error);
     throw error;
   }
 };
