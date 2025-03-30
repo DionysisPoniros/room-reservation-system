@@ -1,5 +1,5 @@
 // src/services/mapService.js
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { getRooms } from './roomService';
 
@@ -121,53 +121,168 @@ export const getRoomsByBuildingAndFloor = async () => {
   }
 };
 
-// Generate map coordinates for a room
-export const generateRoomCoordinates = (roomName, building, floor) => {
-  // In a real implementation, this would use actual coordinates
-  // For now, we'll return some default values
-  return {
-    x: 100,
-    y: 100,
-    width: 50,
-    height: 30
-  };
+// Get room reservations for a specific time
+export const getRoomReservationsForTime = async (roomId, date, hour) => {
+  try {
+    // Create a date object for the specified hour
+    const startTime = new Date(date);
+    startTime.setHours(hour, 0, 0, 0);
+    
+    const endTime = new Date(startTime);
+    endTime.setHours(hour + 1, 0, 0, 0);
+    
+    // Convert to Firestore timestamps
+    const startTimestamp = Timestamp.fromDate(startTime);
+    const endTimestamp = Timestamp.fromDate(endTime);
+    
+    // Query for reservations that overlap with this time period
+    const q = query(
+      collection(db, 'reservations'),
+      where('roomId', '==', roomId),
+      where('status', '!=', 'cancelled'),
+      where('startTime', '<=', endTimestamp),
+      where('endTime', '>', startTimestamp)
+    );
+    
+    const snapshot = await getDocs(q);
+    
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (error) {
+    console.error("Error getting room reservations for time:", error);
+    throw error;
+  }
 };
 
-// Check if a room is in a specific building and floor
-export const isRoomInBuildingAndFloor = (room, building, floor) => {
-  // Check building
-  let roomBuilding = '';
-  if (room.building) {
-    roomBuilding = normalizeBuilding(room.building);
-  } else if (room.location) {
-    const locationParts = room.location.split(',');
-    if (locationParts.length > 0) {
-      roomBuilding = normalizeBuilding(locationParts[0].trim());
+// Get all reservations for a building and floor on a specific date
+export const getReservationsForBuildingAndFloor = async (building, floor, date) => {
+  try {
+    // Get rooms for the building and floor
+    const roomsByBuilding = await getRoomsByBuildingAndFloor();
+    const rooms = roomsByBuilding[building]?.[floor] || [];
+    
+    // If no rooms found, return empty result
+    if (!rooms.length) {
+      return {};
     }
+    
+    // Create a map of room IDs
+    const roomIds = rooms.map(room => room.id);
+    
+    // Get start and end of the selected date
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    // Convert to Firestore timestamps
+    const startTimestamp = Timestamp.fromDate(startOfDay);
+    const endTimestamp = Timestamp.fromDate(endOfDay);
+    
+    // Query for all reservations for these rooms on this date
+    const q = query(
+      collection(db, 'reservations'),
+      where('roomId', 'in', roomIds),
+      where('status', '!=', 'cancelled'),
+      where('startTime', '<=', endTimestamp),
+      where('endTime', '>=', startTimestamp)
+    );
+    
+    const snapshot = await getDocs(q);
+    
+    // Group reservations by room ID
+    const reservationsByRoom = {};
+    
+    snapshot.docs.forEach(doc => {
+      const reservation = {
+        id: doc.id,
+        ...doc.data()
+      };
+      
+      if (!reservationsByRoom[reservation.roomId]) {
+        reservationsByRoom[reservation.roomId] = [];
+      }
+      
+      reservationsByRoom[reservation.roomId].push(reservation);
+    });
+    
+    return reservationsByRoom;
+  } catch (error) {
+    console.error("Error getting reservations for building and floor:", error);
+    throw error;
   }
-  
-  // Check floor
-  let roomFloor = '';
-  if (room.floor) {
-    roomFloor = room.floor;
-  } else if (room.name) {
-    roomFloor = extractFloor(room.name);
-  }
-  
-  return roomBuilding === building && roomFloor === floor;
 };
 
-// Normalize coordinates if needed
-export const normalizeCoordinates = (x, y, width, height, containerWidth, containerHeight) => {
-  const normalizedX = Math.max(0, Math.min(x, containerWidth - width));
-  const normalizedY = Math.max(0, Math.min(y, containerHeight - height));
-  
-  return {
-    x: normalizedX,
-    y: normalizedY,
-    width,
-    height
-  };
+// Check if a room is available at a specific time
+export const isRoomAvailableAtTime = async (roomId, date, hour) => {
+  try {
+    const reservations = await getRoomReservationsForTime(roomId, date, hour);
+    return reservations.length === 0;
+  } catch (error) {
+    console.error("Error checking room availability:", error);
+    throw error;
+  }
+};
+
+// Generate room availability map for all hours in a day
+export const generateRoomAvailabilityMap = async (roomId, date) => {
+  try {
+    // Get start and end of the selected date
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    // Convert to Firestore timestamps
+    const startTimestamp = Timestamp.fromDate(startOfDay);
+    const endTimestamp = Timestamp.fromDate(endOfDay);
+    
+    // Query for all reservations for this room on this date
+    const q = query(
+      collection(db, 'reservations'),
+      where('roomId', '==', roomId),
+      where('status', '!=', 'cancelled'),
+      where('startTime', '<=', endTimestamp),
+      where('endTime', '>=', startTimestamp)
+    );
+    
+    const snapshot = await getDocs(q);
+    
+    const reservations = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    // Initialize availability map (hours 0-23)
+    const availabilityMap = Array(24).fill(true);
+    
+    // Mark hours as unavailable based on reservations
+    reservations.forEach(reservation => {
+      const startTime = new Date(reservation.startTime.seconds * 1000);
+      const endTime = new Date(reservation.endTime.seconds * 1000);
+      
+      // Only consider the portion of the reservation that falls on this date
+      const reservationStartHour = startTime.getDate() === startOfDay.getDate() ? 
+        startTime.getHours() : 0;
+      
+      const reservationEndHour = endTime.getDate() === endOfDay.getDate() ? 
+        endTime.getHours() : 23;
+      
+      // Mark all hours in the reservation as unavailable
+      for (let hour = reservationStartHour; hour <= reservationEndHour; hour++) {
+        availabilityMap[hour] = false;
+      }
+    });
+    
+    return availabilityMap;
+  } catch (error) {
+    console.error("Error generating room availability map:", error);
+    throw error;
+  }
 };
 
 // Export map configuration
@@ -199,18 +314,18 @@ export const MAP_CONFIG = {
   // Floor plan paths
   floorPlans: {
     "Max Lowenthal Hall": {
-      "1st Floor": "/images/floor-plans/12-MAX-LOWENTHAL-HALL-1ST-FLOOR.pdf",
-      "2nd Floor": "/images/floor-plans/12-MAX-LOWENTHAL-HALL-2ND-FLOOR.pdf",
-      "3rd Floor": "/images/floor-plans/12-MAX-LOWENTHAL-HALL-3RD-FLOOR.pdf",
-      "4th Floor": "/images/floor-plans/12-MAX-LOWENTHAL-HALL-4TH-FLOOR.pdf",
-      "A-Level": "/images/floor-plans/12-MAX-LOWENTHAL-HALL-A-LEVEL.pdf"
+      "1st Floor": "/images/floor-plans/LOW-1.svg",
+      "2nd Floor": "/images/floor-plans/LOW-2.svg",
+      "3rd Floor": "/images/floor-plans/LOW-3.svg",
+      "4th Floor": "/images/floor-plans/LOW-4.svg",
+      "A-Level": "/images/floor-plans/LOW-A.svg"
     },
     "Wallace Library": {
-      "1st Floor": "/images/floor-plans/05-WALLACE-LIBRARY-1ST-FLOOR.pdf",
-      "2nd Floor": "/images/floor-plans/05-WALLACE-LIBRARY-2ND-FLOOR.pdf",
-      "3rd Floor": "/images/floor-plans/05-WALLACE-LIBRARY-3RD-FLOOR.pdf",
-      "4th Floor": "/images/floor-plans/05-WALLACE-LIBRARY-4TH-FLOOR.pdf",
-      "A-Level": "/images/floor-plans/05-WALLACE-LIBRARY-A-LEVEL.pdf"
+      "1st Floor": "/images/floor-plans/WAL-1.svg",
+      "2nd Floor": "/images/floor-plans/WAL-2.svg",
+      "3rd Floor": "/images/floor-plans/WAL-3.svg",
+      "4th Floor": "/images/floor-plans/WAL-4.svg",
+      "A-Level": "/images/floor-plans/WAL-A.svg"
     }
   }
 };

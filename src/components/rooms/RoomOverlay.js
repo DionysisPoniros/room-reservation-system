@@ -59,7 +59,11 @@ const RoomOverlay = ({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: isHovered ? '0 2px 8px rgba(0,0,0,0.2)' : 'none'
+    boxShadow: isHovered ? '0 2px 8px rgba(0,0,0,0.2)' : 'none',
+    '&:hover': {
+      transform: 'translateY(-2px)',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+    }
   };
   
   // Only show label for larger rooms
@@ -67,7 +71,7 @@ const RoomOverlay = ({
   
   const handleClick = () => {
     if (onClick && room) {
-      onClick(room);
+      onClick(room.id || room.name);
     }
   };
   
@@ -76,11 +80,14 @@ const RoomOverlay = ({
     
     return (
       <Box sx={{ p: 1 }}>
-        <Typography variant="subtitle2">{room.name}</Typography>
-        <Typography variant="body2">Type: {room.type || 'Not specified'}</Typography>
+        <Typography variant="subtitle2">{room.name || label}</Typography>
+        <Typography variant="body2">{room.type || 'Room'}</Typography>
         <Typography variant="body2">Capacity: {room.capacity || 'Unknown'}</Typography>
-        <Typography variant="body2" color={isOccupied ? "error.main" : "success.main"}>
+        <Typography variant="body2" color={isOccupied ? "error.main" : "success.main"} fontWeight="bold">
           Status: {isOccupied ? 'Occupied' : 'Available'}
+        </Typography>
+        <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
+          Click for details
         </Typography>
       </Box>
     );
@@ -91,6 +98,8 @@ const RoomOverlay = ({
       title={tooltipTitle()}
       placement="top"
       arrow
+      enterDelay={300}
+      leaveDelay={100}
     >
       <Box
         sx={boxStyles}
@@ -102,7 +111,7 @@ const RoomOverlay = ({
           <Typography
             variant="caption"
             sx={{
-              bgcolor: 'rgba(255, 255, 255, 0.8)',
+              bgcolor: 'rgba(255, 255, 255, 0.85)',
               p: 0.5,
               borderRadius: 1,
               fontWeight: 500,
@@ -112,7 +121,9 @@ const RoomOverlay = ({
               textAlign: 'center',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
+              whiteSpace: 'nowrap',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+              border: `1px solid ${isOccupied ? theme.palette.error.light : theme.palette.success.light}`
             }}
           >
             {label}
