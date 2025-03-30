@@ -1,4 +1,3 @@
-// src/services/roomService.js - Fixed filtering logic
 import { 
   collection, 
   getDocs, 
@@ -16,8 +15,10 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { roomOverlays } from '../data/roomOverlays';
+
 // Collection references
 const roomsCollection = collection(db, 'rooms');
+
 const reservationsCollection = collection(db, 'reservations');
 const normalizeRoomId = (id) => {
   // Remove any invalid characters for Firestore
@@ -419,61 +420,58 @@ export const getUserDailyBookings = async (userId, startDate, endDate) => {
 };
 
 // Get reservations for a user
-export const getUserReservations = async (userId) => {
+// src/services/roomService.js
+export const getUserReservations = async (userId, userEmail) => { // Add userEmail parameter
   try {
-    // Create an array to store all reservations
     let allReservations = [];
-    
+
     // Query 1: Get reservations where the user is the primary booker
     const primaryQuery = query(
-      reservationsCollection, 
+      reservationsCollection,
       where("userId", "==", userId),
       orderBy("startTime", "desc")
     );
-    
+
     const primarySnapshot = await getDocs(primaryQuery);
     const primaryReservations = primarySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
-      isPrimaryBooker: true // Add a flag to indicate this user is the primary booker
+      isPrimaryBooker: true
     }));
-    
+
     allReservations = [...primaryReservations];
-    
+
     // Query 2: Get reservations where the user is a collaborator
+    // Use the passed userEmail parameter here
     const collaboratorQuery = query(
       reservationsCollection,
       where("collaborators", "array-contains", {
         userId: userId,
-        email: currentUser.email, // Add this field
-        status: "pending"
+        email: userEmail, // Use the passed userEmail
+        status: "pending" // Or adjust status as needed
       }),
       orderBy("startTime", "desc")
     );
-    
+
+    // ... (rest of the function logic remains the same) ...
+
+    // Example of how you might handle the collaborator query result:
     try {
       const collaboratorSnapshot = await getDocs(collaboratorQuery);
       const collaboratorReservations = collaboratorSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        isPrimaryBooker: false, // User is a collaborator, not the primary booker
-        collaborationStatus: "invited" // Status of the collaboration
+        isPrimaryBooker: false,
+        collaborationStatus: "invited" // Or based on the actual status if you query multiple
       }));
-      
       allReservations = [...allReservations, ...collaboratorReservations];
     } catch (err) {
-      // If this query fails, it might be due to missing index or field structure
-      // We can still return the primary reservations
-      console.error("Error fetching collaborative reservations:", err);
+       console.error("Error fetching collaborative reservations:", err);
     }
-    
-    // Sort all reservations by start time (most recent first)
-    allReservations.sort((a, b) => {
-      const aTime = a.startTime?.seconds || 0;
-      const bTime = b.startTime?.seconds || 0;
-      return bTime - aTime; // Descending order
-    });
-    
+
+    // Sort all reservations
+    allReservations.sort((a, b) => (b.startTime?.seconds || 0) - (a.startTime?.seconds || 0));
+
     return allReservations;
   } catch (error) {
     console.error("Error getting user reservations:", error);

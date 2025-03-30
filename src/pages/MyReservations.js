@@ -84,74 +84,89 @@ function MyReservations() {
       try {
         setLoading(true);
         setError(null);
-        
+
+        // Ensure currentUser and currentUser.email are available before proceeding
+        if (!currentUser || !currentUser.email) {
+          console.log("User not logged in or email unavailable.");
+          setLoading(false);
+          // Optionally, redirect to login or show a message
+          // navigate('/login');
+          return;
+        }
+
         // Get all user reservations (primary and collaborative)
-        const reservationsData = await getUserReservations(currentUser.uid);
-        
+        // Pass both userId (currentUser.uid) and userEmail (currentUser.email)
+        const reservationsData = await getUserReservations(currentUser.uid, currentUser.email);
+
         // Separate into owned and invited reservations
         const ownedReservations = reservationsData.filter(res => res.isPrimaryBooker);
         const invited = reservationsData.filter(res => !res.isPrimaryBooker);
-        
+
         // Fetch room details for each reservation
         const processReservations = async (reservationsList) => {
           return await Promise.all(
             reservationsList.map(async (reservation) => {
               try {
+                // Make sure roomId exists before fetching
+                if (!reservation.roomId) {
+                    console.warn(`Reservation ${reservation.id} is missing roomId.`);
+                    return reservation; // Return reservation without room data
+                }
                 const roomData = await getRoom(reservation.roomId);
                 return { ...reservation, room: roomData };
               } catch (err) {
-                console.error(`Error fetching room for reservation ${reservation.id}:`, err);
-                return reservation;
+                console.error(`Error fetching room (${reservation.roomId}) for reservation ${reservation.id}:`, err);
+                return reservation; // Return reservation even if room fetch fails
               }
             })
           );
         };
-        
+
         const reservationsWithRooms = await processReservations(ownedReservations);
         const invitedWithRooms = await processReservations(invited);
-        
+
         setReservations(reservationsWithRooms);
         setInvitedReservations(invitedWithRooms);
-        
-        // Get today's bookings
+
+        // Get today's date range
         const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
+        today.setHours(0, 0, 0, 0); // Start of today
         const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        
-        setLoading(false);
-        setLoadingRequests(true);
-        
+        tomorrow.setDate(tomorrow.getDate() + 1); // Start of tomorrow
+
+        // Set loading state for requests/allowance
+        setLoading(false); // Indicate main loading is done
+        setLoadingRequests(true); // Start loading requests/allowance
+
         try {
-          // Get user hour requests and allowance first
+          // Get user hour requests and allowance
           const requests = await getUserHourRequests(currentUser.uid);
           setHourRequests(requests);
-          
-          // Get the user's custom allowance (most authoritative source)
+
           const allowance = await getUserHourAllowance(currentUser.uid);
-          const userDailyLimit = allowance.dailyHours || 5;
+          const userDailyLimit = allowance.dailyHours || 5; // Default to 5 if not set
           setDailyLimit(userDailyLimit);
-          
-          // Now get today's bookings with knowledge of the correct limit
+
+          // Get today's bookings using the correct daily limit
           const result = await getUserDailyBookings(currentUser.uid, today, tomorrow);
           setTodayBookings(result.bookings || []);
           setDailyHoursUsed(result.totalHoursBooked || 0);
-          
-          // Calculate remaining hours using the authoritative userDailyLimit
-          const remaining = Math.max(0, userDailyLimit - result.totalHoursBooked);
+
+          const remaining = Math.max(0, userDailyLimit - (result.totalHoursBooked || 0));
           setDailyHoursRemaining(remaining);
-          
-          setLoadingRequests(false);
+
+          setLoadingRequests(false); // Finish loading requests/allowance
         } catch (requestErr) {
           console.error("Error fetching hour requests or allowance:", requestErr);
+          setError("Failed to load daily booking limits."); // Set specific error
           setLoadingRequests(false);
         }
+
       } catch (err) {
-        console.error("Error fetching data:", err);
+        console.error("Error fetching reservations data:", err);
         setError("Failed to load reservations. Please try again.");
-        setLoading(false);
-        setLoadingRequests(false);
+        setLoading(false); // Ensure loading stops on error
+        setLoadingRequests(false); // Ensure this stops too
       }
     };
   
