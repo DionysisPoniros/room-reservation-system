@@ -226,6 +226,8 @@ function BookingForm() {
     }
   };
 
+ 
+
   const searchUsers = async (searchQuery) => {
     if (!searchQuery || searchQuery.length < 3) {
       setSearchResults([]);
@@ -234,9 +236,9 @@ function BookingForm() {
     
     try {
       setSearchingUsers(true);
+      console.log(`Searching for users with email starting with "${searchQuery}"`);
       
       // Query Firebase for users with email starting with the search query
-      // Note: This requires an index on the 'email' field
       const usersRef = collection(db, 'users');
       const q = query(
         usersRef,
@@ -247,14 +249,27 @@ function BookingForm() {
       
       const snapshot = await getDocs(q);
       
+      console.log(`Found ${snapshot.docs.length} potential matches`);
+      
       // Filter out the current user
       const users = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter(user => user.email !== currentUser.email);
       
+      console.log(`After filtering current user, found ${users.length} results`);
       setSearchResults(users);
     } catch (err) {
       console.error("Error searching users:", err);
+      // Add more detailed error logging
+      if (err.code === 'permission-denied') {
+        console.error("Permission denied. Check Firestore rules.");
+        setError("Permission denied. Contact administrator.");
+      } else if (err.code === 'failed-precondition') {
+        console.error("Missing index on 'email' field in 'users' collection");
+        setError("Search functionality unavailable. Contact administrator.");
+      } else {
+        setError("Error searching for users");
+      }
     } finally {
       setSearchingUsers(false);
     }

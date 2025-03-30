@@ -1,5 +1,4 @@
-// src/services/userService.js
-// src/services/userService.js
+
 import { 
     collection, addDoc, getDocs, getDoc, updateDoc, setDoc, doc,
     query, where, orderBy, Timestamp 
@@ -28,6 +27,47 @@ import {
     }
   };
   
+  export const createOrUpdateUserDocument = async (user) => {
+    try {
+      if (!user || !user.uid || !user.email) {
+        throw new Error("Invalid user data provided");
+      }
+      
+      // Reference to user document
+      const userRef = doc(db, 'users', user.uid);
+      
+      // Check if document exists
+      const userSnap = await getDoc(userRef);
+      
+      // User data to store
+      const userData = {
+        id: user.uid,
+        email: user.email,
+        displayName: user.displayName || '',
+        lastLogin: Timestamp.now()
+      };
+      
+      if (!userSnap.exists()) {
+        // Create new user document
+        await setDoc(userRef, {
+          ...userData,
+          createdAt: Timestamp.now()
+        });
+        console.log(`Created new user document for ${user.email}`);
+      } else {
+        // Update existing document
+        await updateDoc(userRef, {
+          ...userData
+        });
+        console.log(`Updated user document for ${user.email}`);
+      }
+      
+      return userData;
+    } catch (error) {
+      console.error("Error creating/updating user document:", error);
+      throw error;
+    }
+  };
   // Get user's hour requests
   export const getUserHourRequests = async (userId) => {
     try {
