@@ -23,7 +23,7 @@ import RoomScheduleView from '../components/rooms/RoomScheduleView';
 import RoomCard from '../components/rooms/RoomCard';
 import EnhancedRoomVisualizer from '../components/rooms/EnhancedRoomVisualizer';
 import { getRooms, searchAvailableRooms, getPopularRooms, getRoomReservations, getReservationsForDate } from '../services/roomService';
-
+import { useLocation } from 'react-router-dom';
 // Icons
 import ViewListIcon from '@mui/icons-material/ViewList';
 import CalendarViewDayIcon from '@mui/icons-material/CalendarViewDay';
@@ -43,16 +43,21 @@ function Rooms() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [searchParams, setSearchParams] = useState(null);
-  const [viewMode, setViewMode] = useState('schedule'); 
+  
   const [reservations, setReservations] = useState({});
   const [scheduleDate, setScheduleDate] = useState(new Date());
   const [lastRefresh, setLastRefresh] = useState(Date.now());
+  const location = useLocation();
   const [cachedData, setCachedData] = useState({
     rooms: null,
     lastFetched: null
   });
   const theme = useTheme();
-
+  const initialViewMode = new URLSearchParams(location.search).get('view') || 'list';
+  const [viewMode, setViewMode] = useState(
+    ['list', 'schedule', 'map'].includes(initialViewMode) ? initialViewMode : 'list'
+  );
+  console.log(`Initial view mode: ${initialViewMode}, Current view mode: ${viewMode}`);
   // Fix any duplicate error message issues
   useEffect(() => {
     // When rooms are successfully loaded, clear any errors that might be showing
@@ -66,6 +71,15 @@ function Rooms() {
       return () => clearTimeout(timer);
     }
   }, [rooms.length, roomsLoading, reservationsLoading]);
+  // Add this effect to handle URL changes after initial render
+  useEffect(() => {
+    const urlViewParam = new URLSearchParams(location.search).get('view');
+    
+    if (urlViewParam && ['list', 'schedule', 'map'].includes(urlViewParam)) {
+      console.log(`Setting view mode to ${urlViewParam} from URL parameter`);
+      setViewMode(urlViewParam);
+    }
+  }, [location.search]);
 
   // Cache key for localStorage
   const CACHE_KEY = 'roomFinderCache';
@@ -319,9 +333,11 @@ function Rooms() {
   }, [fetchRooms, fetchReservationsForCurrentDate]);
 
   // View mode change handler
+  // Update handleViewChange to log when it's called
   const handleViewChange = useCallback((newView) => {
+    console.log(`View mode changing from ${viewMode} to ${newView}`);
     setViewMode(newView);
-  }, []);
+  }, [viewMode]);
 
   // Schedule date change handler
   const handleScheduleDateChange = useCallback((newDate) => {
@@ -367,16 +383,39 @@ function Rooms() {
           Room Finder
         </Typography>
         
-        {/* Search Component */}
-        <RoomSearch 
-          onSearch={handleSearch} 
-          onViewModeChange={handleViewChange}
-          currentViewMode={viewMode} 
-        />
+        {/* Search Component - Only show when NOT in map view */}
+        {viewMode !== 'map' && (
+          <RoomSearch 
+            onSearch={handleSearch} 
+            onViewModeChange={handleViewChange}
+            currentViewMode={viewMode} 
+          />
+        )}
         
-        {/* Search Results Controls */}
-        <Box sx={{ mb: 3, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between' }}>
-          {searchParams ? (
+        {/* View Mode Selector - Always visible, even in map view */}
+        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
+          <ToggleButtonGroup
+            value={viewMode}
+            exclusive
+            onChange={(e, newMode) => newMode && handleViewChange(newMode)}
+            aria-label="view mode"
+            size="small"
+          >
+            <ToggleButton value="list" aria-label="list view">
+              <ViewListIcon />
+            </ToggleButton>
+            <ToggleButton value="schedule" aria-label="schedule view">
+              <CalendarViewDayIcon />
+            </ToggleButton>
+            <ToggleButton value="map" aria-label="map view">
+              <MapIcon />
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+        
+        {/* Search Results Controls - Only show when NOT in map view */}
+        {viewMode !== 'map' && searchParams && (
+          <Box sx={{ mb: 3, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between' }}>
             <Paper sx={{ p: 2, display: 'flex', flexGrow: 1, justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="body1">
                 Showing {rooms.length} available room{rooms.length !== 1 ? 's' : ''} for{' '}
@@ -387,13 +426,11 @@ function Rooms() {
                 Clear Search
               </Button>
             </Paper>
-          ) : (
-            <Box></Box>
-          )}
-        </Box>
+          </Box>
+        )}
         
-        {/* Show loading indicator for searches */}
-        {searching && (
+        {/* Show loading indicator for searches - Only when NOT in map view */}
+        {viewMode !== 'map' && searching && (
           <Box sx={{ width: '100%', mb: 3 }}>
             <LinearProgress />
           </Box>
@@ -542,8 +579,6 @@ function Rooms() {
               )}
             </>
           )}
-          
-          
           
           {viewMode === 'map' && (
             <>

@@ -20,7 +20,7 @@ import MeetingRoomIcon from '@mui/icons-material/MeetingRoom';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import PeopleIcon from '@mui/icons-material/People';
 import SearchIcon from '@mui/icons-material/Search';
-
+import MapIcon from '@mui/icons-material/Map';
 function Home() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -179,21 +179,21 @@ function Home() {
                 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <CalendarMonthIcon sx={{ fontSize: 36, color: theme.palette.primary.main, mr: 2 }} />
+                  <MapIcon sx={{ fontSize: 36, color: theme.palette.primary.main, mr: 2 }} />
                   <Typography variant="h5" component="h3" sx={{ fontWeight: 600 }}>
-                    Book Instantly
+                    Interactive Map
                   </Typography>
                 </Box>
                 <Typography paragraph color="text.secondary">
-                  Reserve rooms with real-time availability checking to avoid scheduling conflicts.
+                  Visualize room locations and check availability in real-time with our interactive campus map.
                 </Typography>
                 <Button 
                   variant="outlined" 
                   component={Link}
-                  to="/rooms"
+                  to="/rooms?view=map"
                   sx={{ mt: 'auto', alignSelf: 'flex-start' }}
                 >
-                  Book Now
+                  View Map
                 </Button>
               </Paper>
             </Grid>
