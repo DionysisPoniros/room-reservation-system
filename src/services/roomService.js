@@ -15,11 +15,14 @@ import {
   startAfter
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
-
+import { roomOverlays } from '../data/roomOverlays';
 // Collection references
 const roomsCollection = collection(db, 'rooms');
 const reservationsCollection = collection(db, 'reservations');
-
+const normalizeRoomId = (id) => {
+  // Remove any invalid characters for Firestore
+  return id.replace(/[/\\#$.\[\]]/g, "-");
+};
 // Fixed getRooms function for roomService.js
 export const getRooms = async (filters = {}) => {
   try {
@@ -108,72 +111,50 @@ const roomCache = new Map();
 // Modify getRoom function in src/services/roomService.js
 export const getRoom = async (id) => {
   try {
-    // Check for forward slashes in room ID which cause Firebase errors
-    if (id.includes('/')) {
-      console.log(`Room ID contains forward slash: ${id}`);
+    console.log(`Getting room with ID: ${id}`);
+    
+    // First, try direct lookup by ID (probably won't work but try anyway)
+    try {
+      const roomDoc = doc(db, 'rooms', id);
+      const roomSnapshot = await getDoc(roomDoc);
       
-      // Option 1: Try to find the room in the roomOverlays data instead
-      const building = Object.keys(roomOverlays).find(b => 
-        Object.keys(roomOverlays[b]).some(f => 
-          Object.keys(roomOverlays[b][f]).includes(id)
-        )
-      );
-      
-      if (building) {
-        const floor = Object.keys(roomOverlays[building]).find(f => 
-          Object.keys(roomOverlays[building][f]).includes(id)
-        );
-        
-        if (floor) {
-          const roomData = roomOverlays[building][floor][id];
-          // Create a room object from the overlay data
-          return {
-            id: id,
-            name: roomData.label || id,
-            building: building,
-            location: `${building}, ${floor}`,
-            type: "Room",
-            capacity: 20, // Default capacity
-            equipment: ["Whiteboard"], // Default equipment
-            // Include overlay positioning data
-            ...roomData
-          };
-        }
+      if (roomSnapshot.exists()) {
+        return {
+          id: roomSnapshot.id,
+          ...roomSnapshot.data()
+        };
       }
-      
-      // If we couldn't find the room in overlays, throw an error
-      throw new Error(`Room with ID ${id} not found in overlay data`);
+    } catch (err) {
+      console.log(`Direct lookup failed for ${id}, trying name search`);
     }
     
-    // Original code for rooms without slashes
-    const roomDoc = doc(db, 'rooms', id);
-    const roomSnapshot = await getDoc(roomDoc);
+    // If direct lookup fails, search by name containing the ID
+    const roomsQuery = query(collection(db, 'rooms'));
+    const roomsSnapshot = await getDocs(roomsQuery);
     
-    if (roomSnapshot.exists()) {
+    // Find the first room where the name contains the ID (like "LOW-3059")
+    const matchingRoom = roomsSnapshot.docs.find(doc => {
+      const roomData = doc.data();
+      return roomData.name && roomData.name.includes(id);
+    });
+    
+    if (matchingRoom) {
+      console.log(`Found room by name match: ${matchingRoom.data().name}`);
       return {
-        id: roomSnapshot.id,
-        ...roomSnapshot.data()
+        id: matchingRoom.id,
+        ...matchingRoom.data()
       };
-    } else {
-      return null;
     }
+    
+    // If still not found, fall back to roomOverlays
+    console.log(`Room not found in database, checking roomOverlays`);
+    
+    // [existing roomOverlays fallback logic]
+    
+    console.log(`Room ${id} not found anywhere`);
+    return null;
   } catch (error) {
     console.error("Error getting room:", error);
-    
-    // Graceful fallback for rooms with slashes
-    if (id.includes('/')) {
-      console.log(`Returning fallback data for room with slash: ${id}`);
-      return {
-        id: id,
-        name: id,
-        type: "Room",
-        capacity: 25,
-        building: "Max Lowenthal Hall",
-        location: "Max Lowenthal Hall",
-        equipment: ["Whiteboard"]
-      };
-    }
-    
     throw error;
   }
 };

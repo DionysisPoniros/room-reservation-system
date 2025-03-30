@@ -275,14 +275,16 @@ const EnhancedRoomVisualizer = ({
   
   // Handle room click
   const handleRoomClick = useCallback(async (roomId) => {
-    console.log("Room clicked:", roomId);
-    
+    console.log("[DEBUG] Room clicked:", roomId);
+    console.log("[DEBUG] Room type:", typeof roomId);
     // Try to find room by exact ID first
-    let room = roomsData.find(r => r.id === roomId);
+    const roomIdString = String(roomId);
+    let room = roomsData.find(r => r.id === roomIdString);
     
     // If not found, try matching by name (fallback)
     if (!room) {
-      room = roomsData.find(r => r.name === roomId || r.name.includes(roomId));
+      room = roomsData.find(r => r.name === roomIdString || r.name.includes(roomIdString));
+      console.log("[DEBUG] Found room by name:", room);
     }
     
     if (room) {
