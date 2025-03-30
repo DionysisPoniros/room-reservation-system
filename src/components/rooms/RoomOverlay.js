@@ -6,18 +6,7 @@ import { useTheme } from '@mui/material/styles';
 /**
  * RoomOverlay Component
  * Renders an interactive overlay for a room on the floor plan
- * 
- * @param {Object} props
- * @param {Object} props.room - Room data object
- * @param {number} props.x - X coordinate on SVG
- * @param {number} props.y - Y coordinate on SVG
- * @param {number} props.width - Width of room on SVG
- * @param {number} props.height - Height of room on SVG
- * @param {string} props.label - Room label to display
- * @param {boolean} props.isOccupied - Whether room is currently occupied
- * @param {function} props.onClick - Click handler for room selection
  */
-// In src/components/rooms/RoomOverlay.js - ensure isOccupied is properly handled
 const RoomOverlay = ({ 
   room, 
   x, 
@@ -25,27 +14,33 @@ const RoomOverlay = ({
   width, 
   height, 
   label, 
-  isOccupied = false, 
+  status = 'available', // Changed from isOccupied to status
   onClick 
 }) => {
   const theme = useTheme();
   const [isHovered, setIsHovered] = useState(false);
   
-  console.log(`Rendering RoomOverlay for ${label}, isOccupied: ${isOccupied}`);
+  // Determine colors based on room status
+  let baseColor, hoverColor, borderColor;
   
-  // Determine colors based on room state - make colors more opaque
-  const baseColor = isOccupied 
-    ? 'rgba(244, 67, 54, 0.8)' // More opaque red for occupied
-    : 'rgba(76, 175, 80, 0.8)'; // More opaque green for available
-    
-  const hoverColor = isOccupied 
-    ? 'rgba(244, 67, 54, 0.9)' 
-    : 'rgba(76, 175, 80, 0.9)';
-    
-  const borderColor = isOccupied 
-    ? theme.palette.error.main 
-    : theme.palette.success.main;
-    
+  switch (status) {
+    case 'occupied':
+      baseColor = 'rgba(244, 67, 54, 0.8)'; // Red for occupied
+      hoverColor = 'rgba(244, 67, 54, 0.9)';
+      borderColor = theme.palette.error.main;
+      break;
+    case 'past':
+      baseColor = 'rgba(0, 0, 0, 0.5)'; // Gray for past/unbookable
+      hoverColor = 'rgba(0, 0, 0, 0.6)';
+      borderColor = theme.palette.grey[600];
+      break;
+    case 'available':
+    default:
+      baseColor = 'rgba(76, 175, 80, 0.8)'; // Green for available
+      hoverColor = 'rgba(76, 175, 80, 0.9)';
+      borderColor = theme.palette.success.main;
+  }
+  
   // Apply visual effects based on state
   const boxStyles = {
     position: 'absolute',
@@ -86,8 +81,20 @@ const RoomOverlay = ({
         <Typography variant="subtitle2">{room.name || label}</Typography>
         <Typography variant="body2">{room.type || 'Room'}</Typography>
         <Typography variant="body2">Capacity: {room.capacity || 'Unknown'}</Typography>
-        <Typography variant="body2" color={isOccupied ? "error.main" : "success.main"} fontWeight="bold">
-          Status: {isOccupied ? 'Occupied' : 'Available'}
+        <Typography 
+          variant="body2" 
+          color={
+            status === 'occupied' ? "error.main" : 
+            status === 'past' ? "text.secondary" :
+            "success.main"
+          } 
+          fontWeight="bold"
+        >
+          Status: {
+            status === 'occupied' ? 'Occupied' : 
+            status === 'past' ? 'Past/Unavailable' :
+            'Available'
+          }
         </Typography>
         <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
           Click for details
@@ -126,7 +133,11 @@ const RoomOverlay = ({
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
               boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
-              border: `1px solid ${isOccupied ? theme.palette.error.light : theme.palette.success.light}`
+              border: `1px solid ${
+                status === 'occupied' ? theme.palette.error.light : 
+                status === 'past' ? theme.palette.grey[400] :
+                theme.palette.success.light
+              }`
             }}
           >
             {label}

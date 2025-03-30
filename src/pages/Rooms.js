@@ -53,9 +53,9 @@ function Rooms() {
     lastFetched: null
   });
   const theme = useTheme();
-  const initialViewMode = new URLSearchParams(location.search).get('view') || 'list';
+  const initialViewMode = new URLSearchParams(location.search).get('view') || 'schedule';
   const [viewMode, setViewMode] = useState(
-    ['list', 'schedule', 'map'].includes(initialViewMode) ? initialViewMode : 'list'
+    ['list', 'schedule', 'map'].includes(initialViewMode) ? initialViewMode : 'schedule'
   );
   console.log(`Initial view mode: ${initialViewMode}, Current view mode: ${viewMode}`);
   // Fix any duplicate error message issues

@@ -72,6 +72,9 @@ const FLOOR_PLANS = {
 // Business hours for room bookings (7AM - 11PM)
 const BUSINESS_HOURS = Array.from({ length: 17 }, (_, i) => i + 7);
 
+
+
+
 /**
  * Enhanced Interactive Floor Map Component
  * Shows room availability by time of day with interactive selection
@@ -116,7 +119,24 @@ const EnhancedRoomVisualizer = ({
     if (hour === 12) return '12:00 PM';
     return `${hour - 12}:00 PM`;
   };
-
+  const isTimeInPast = useCallback((date, hour) => {
+    const now = new Date();
+    const selectedDate = new Date(date);
+    
+    // If the date is in the past, return true
+    if (selectedDate.setHours(0, 0, 0, 0) < now.setHours(0, 0, 0, 0)) {
+      return true;
+    }
+    
+    // If it's today, check if the hour is in the past
+    if (selectedDate.getDate() === now.getDate() && 
+        selectedDate.getMonth() === now.getMonth() && 
+        selectedDate.getFullYear() === now.getFullYear()) {
+      return hour < now.getHours();
+    }
+    
+    return false;
+  }, []);
   // Fetch SVG content
   useEffect(() => {
     let isMounted = true;
@@ -366,8 +386,11 @@ const EnhancedRoomVisualizer = ({
   // Get room overlays for the current building and floor
   const getRoomOverlaysData = useCallback(() => {
     const overlays = roomsData.map(room => {
-      const occupied = isRoomOccupiedAtHour(room.id);
-      console.log(`Room ${room.id} (${room.name}) occupied: ${occupied}`);
+      // First check if the time is in the past
+      const isPast = isTimeInPast(selectedDate, selectedHour);
+      
+      // Only check occupation if it's not in the past
+      const occupied = !isPast && isRoomOccupiedAtHour(room.id);
       
       return {
         id: room.id,
@@ -378,13 +401,12 @@ const EnhancedRoomVisualizer = ({
         width: room.width,
         height: room.height,
         roomData: room,
-        isOccupied: occupied
+        status: isPast ? 'past' : (occupied ? 'occupied' : 'available')
       };
     });
     
-    console.log(`Generated ${overlays.length} room overlays`);
     return overlays;
-  }, [roomsData, isRoomOccupiedAtHour]);  
+  }, [roomsData, isRoomOccupiedAtHour, selectedDate, selectedHour, isTimeInPast]);
 
   // Handle hour slider change
   const handleHourChange = (event, newValue) => {
@@ -640,6 +662,11 @@ const EnhancedRoomVisualizer = ({
           <Box sx={{ width: 16, height: 16, borderRadius: 1, bgcolor: 'rgba(244, 67, 54, 0.7)', mr: 1 }}></Box>
           <Typography variant="body2">Occupied</Typography>
         </Box>
+        
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box sx={{ width: 16, height: 16, borderRadius: 1, bgcolor: 'rgba(0, 0, 0, 0.5)', mr: 1 }}></Box>
+          <Typography variant="body2">Past/Unavailable</Typography>
+        </Box>
       </Box>
       
       {/* Room Count */}
@@ -752,7 +779,7 @@ const EnhancedRoomVisualizer = ({
                         width={overlay.width}
                         height={overlay.height}
                         label={overlay.label}
-                        isOccupied={overlay.isOccupied}
+                        status={overlay.status} // Use status instead of isOccupied
                         onClick={() => handleRoomClick(overlay.id)}
                       />
                     ))}
