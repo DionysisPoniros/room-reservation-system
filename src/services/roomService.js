@@ -445,7 +445,8 @@ export const getUserReservations = async (userId) => {
       reservationsCollection,
       where("collaborators", "array-contains", {
         userId: userId,
-        status: "pending" // You can expand this to include 'accepted' status as well
+        email: currentUser.email, // Add this field
+        status: "pending"
       }),
       orderBy("startTime", "desc")
     );
