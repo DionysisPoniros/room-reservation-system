@@ -105,30 +105,75 @@ export const getRooms = async (filters = {}) => {
 
 // Get a specific room (with caching)
 const roomCache = new Map();
+// Modify getRoom function in src/services/roomService.js
 export const getRoom = async (id) => {
   try {
-    // Check cache first
-    if (roomCache.has(id)) {
-      return roomCache.get(id);
+    // Check for forward slashes in room ID which cause Firebase errors
+    if (id.includes('/')) {
+      console.log(`Room ID contains forward slash: ${id}`);
+      
+      // Option 1: Try to find the room in the roomOverlays data instead
+      const building = Object.keys(roomOverlays).find(b => 
+        Object.keys(roomOverlays[b]).some(f => 
+          Object.keys(roomOverlays[b][f]).includes(id)
+        )
+      );
+      
+      if (building) {
+        const floor = Object.keys(roomOverlays[building]).find(f => 
+          Object.keys(roomOverlays[building][f]).includes(id)
+        );
+        
+        if (floor) {
+          const roomData = roomOverlays[building][floor][id];
+          // Create a room object from the overlay data
+          return {
+            id: id,
+            name: roomData.label || id,
+            building: building,
+            location: `${building}, ${floor}`,
+            type: "Room",
+            capacity: 20, // Default capacity
+            equipment: ["Whiteboard"], // Default equipment
+            // Include overlay positioning data
+            ...roomData
+          };
+        }
+      }
+      
+      // If we couldn't find the room in overlays, throw an error
+      throw new Error(`Room with ID ${id} not found in overlay data`);
     }
     
+    // Original code for rooms without slashes
     const roomDoc = doc(db, 'rooms', id);
     const roomSnapshot = await getDoc(roomDoc);
     
     if (roomSnapshot.exists()) {
-      const roomData = {
+      return {
         id: roomSnapshot.id,
         ...roomSnapshot.data()
       };
-      
-      // Update cache
-      roomCache.set(id, roomData);
-      return roomData;
     } else {
       return null;
     }
   } catch (error) {
     console.error("Error getting room:", error);
+    
+    // Graceful fallback for rooms with slashes
+    if (id.includes('/')) {
+      console.log(`Returning fallback data for room with slash: ${id}`);
+      return {
+        id: id,
+        name: id,
+        type: "Room",
+        capacity: 25,
+        building: "Max Lowenthal Hall",
+        location: "Max Lowenthal Hall",
+        equipment: ["Whiteboard"]
+      };
+    }
+    
     throw error;
   }
 };

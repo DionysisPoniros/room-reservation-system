@@ -17,6 +17,7 @@ import { useTheme } from '@mui/material/styles';
  * @param {boolean} props.isOccupied - Whether room is currently occupied
  * @param {function} props.onClick - Click handler for room selection
  */
+// In src/components/rooms/RoomOverlay.js - ensure isOccupied is properly handled
 const RoomOverlay = ({ 
   room, 
   x, 
@@ -30,14 +31,16 @@ const RoomOverlay = ({
   const theme = useTheme();
   const [isHovered, setIsHovered] = useState(false);
   
-  // Determine colors based on room state
+  console.log(`Rendering RoomOverlay for ${label}, isOccupied: ${isOccupied}`);
+  
+  // Determine colors based on room state - make colors more opaque
   const baseColor = isOccupied 
-    ? 'rgba(244, 67, 54, 0.5)' // Red for occupied
-    : 'rgba(76, 175, 80, 0.5)'; // Green for available
+    ? 'rgba(244, 67, 54, 0.8)' // More opaque red for occupied
+    : 'rgba(76, 175, 80, 0.8)'; // More opaque green for available
     
   const hoverColor = isOccupied 
-    ? 'rgba(244, 67, 54, 0.7)' 
-    : 'rgba(76, 175, 80, 0.7)';
+    ? 'rgba(244, 67, 54, 0.9)' 
+    : 'rgba(76, 175, 80, 0.9)';
     
   const borderColor = isOccupied 
     ? theme.palette.error.main 

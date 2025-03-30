@@ -22,7 +22,11 @@ import {
 import { Link } from 'react-router-dom';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { format, addHours, setHours, setMinutes, setSeconds, setMilliseconds } from 'date-fns';
-
+// Add these imports at the top with your other imports
+import { TextField } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 // Import our custom RoomOverlay component
 import RoomOverlay from './RoomOverlay';
 
@@ -170,6 +174,7 @@ const EnhancedRoomVisualizer = ({
   }, [selectedBuilding, selectedFloor]);
   
   // Fetch rooms and reservations data
+  // Modify the useEffect that fetches room data
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -211,26 +216,42 @@ const EnhancedRoomVisualizer = ({
         
         setRoomsData(detailedRooms);
         
-        // Fetch reservations for all rooms on this floor for today
-        const startOfDay = new Date(selectedDate);
+        // Format date for consistent comparison
+        const formattedDate = new Date(selectedDate);
+        
+        // Fetch reservations for all rooms on the SELECTED date (not today)
+        const startOfDay = new Date(formattedDate);
         startOfDay.setHours(0, 0, 0, 0);
         
-        const endOfDay = new Date(selectedDate);
+        const endOfDay = new Date(formattedDate);
         endOfDay.setHours(23, 59, 59, 999);
+        
+        console.log(`Fetching reservations for: ${startOfDay.toISOString()} to ${endOfDay.toISOString()}`);
         
         const reservationsByRoom = {};
         
         for (const room of detailedRooms) {
           try {
-            const roomReservations = await getRoomReservations(room.id);
+            // Use a service function that fetches reservations for a specific date range
+            // Modify getRoomReservations to accept date parameters or use another function
+            const allRoomReservations = await getRoomReservations(room.id);
             
-            // Filter to only include today's reservations
-            const todayReservations = roomReservations.filter(res => {
-              const resDate = new Date(res.startTime.seconds * 1000);
-              return resDate >= startOfDay && resDate <= endOfDay;
+            // Filter to only include the selected date's reservations
+            const selectedDateReservations = allRoomReservations.filter(res => {
+              if (!res.startTime || !res.startTime.seconds) return false;
+              
+              const resStartDate = new Date(res.startTime.seconds * 1000);
+              const resEndDate = new Date(res.endTime.seconds * 1000);
+              
+              // Check if reservation overlaps with selected date
+              return (
+                (resStartDate >= startOfDay && resStartDate <= endOfDay) || // Starts on selected date
+                (resEndDate >= startOfDay && resEndDate <= endOfDay) || // Ends on selected date
+                (resStartDate <= startOfDay && resEndDate >= endOfDay) // Spans selected date
+              );
             });
             
-            reservationsByRoom[room.id] = todayReservations;
+            reservationsByRoom[room.id] = selectedDateReservations;
           } catch (resErr) {
             console.error(`Error fetching reservations for room ${room.id}:`, resErr);
             reservationsByRoom[room.id] = [];
@@ -256,15 +277,20 @@ const EnhancedRoomVisualizer = ({
   const handleRoomClick = useCallback(async (roomId) => {
     console.log("Room clicked:", roomId);
     
-    // Find the room data from roomsData
-    const room = roomsData.find(r => r.id === roomId);
+    // Try to find room by exact ID first
+    let room = roomsData.find(r => r.id === roomId);
+    
+    // If not found, try matching by name (fallback)
+    if (!room) {
+      room = roomsData.find(r => r.name === roomId || r.name.includes(roomId));
+    }
     
     if (room) {
       setSelectedRoom(roomId);
       setSelectedRoomData(room);
       
       // Set reservations for this room
-      const roomReservations = reservationsData[roomId] || [];
+      const roomReservations = reservationsData[room.id] || [];
       setSelectedRoomReservations(roomReservations);
       
       // Open drawer with room details
@@ -274,40 +300,89 @@ const EnhancedRoomVisualizer = ({
       setError(`Room information for ${roomId} not found in database`);
     }
   }, [roomsData, reservationsData]);
-
   // Check if a room is occupied at the selected hour
   const isRoomOccupiedAtHour = useCallback((roomId) => {
-    if (!reservationsData[roomId]) return false;
+    // For debugging
+    console.log(`Checking if room ${roomId} is occupied at hour ${selectedHour}`);
+    
+    // Get the reservations for this room
+    const roomReservations = reservationsData[roomId] || [];
+    console.log(`Room ${roomId} has ${roomReservations.length} reservations`);
+    
+    if (roomReservations.length === 0) return false;
     
     // Set the selected hour to the selected date
     const selectedDateTime = new Date(selectedDate);
     selectedDateTime.setHours(selectedHour, 0, 0, 0);
     
-    return reservationsData[roomId].some(reservation => {
+    // End of the hour
+    const selectedDateTimeEnd = new Date(selectedDateTime);
+    selectedDateTimeEnd.setHours(selectedHour + 1, 0, 0, 0);
+    
+    // Debug log
+    console.log(`Checking period: ${selectedDateTime.toLocaleString()} to ${selectedDateTimeEnd.toLocaleString()}`);
+    
+    // Check if any reservation overlaps with this hour
+    const isOccupied = roomReservations.some(reservation => {
       if (reservation.status === 'cancelled') return false;
       
+      // Make sure the reservation has valid timestamps
+      if (!reservation.startTime || !reservation.startTime.seconds || 
+          !reservation.endTime || !reservation.endTime.seconds) {
+        console.log(`Skipping reservation with invalid timestamps:`, reservation);
+        return false;
+      }
+      
+      // Convert Firebase timestamps to Date objects
       const startTime = new Date(reservation.startTime.seconds * 1000);
       const endTime = new Date(reservation.endTime.seconds * 1000);
       
-      // Check if the selected hour falls within the reservation time range
-      return selectedDateTime >= startTime && selectedDateTime < endTime;
+      // Debug log
+      console.log(`Comparing with reservation: ${startTime.toLocaleString()} to ${endTime.toLocaleString()}`);
+      
+      // Check if there's any overlap between the hour slot and reservation
+      const hasOverlap = (
+        // Reservation starts during this hour
+        (startTime >= selectedDateTime && startTime < selectedDateTimeEnd) ||
+        // Reservation ends during this hour
+        (endTime > selectedDateTime && endTime <= selectedDateTimeEnd) ||
+        // Reservation spans this entire hour
+        (startTime <= selectedDateTime && endTime >= selectedDateTimeEnd)
+      );
+      
+      if (hasOverlap) {
+        console.log(`OVERLAP FOUND for room ${roomId} at hour ${selectedHour}`);
+      }
+      
+      return hasOverlap;
     });
+    
+    console.log(`Room ${roomId} occupied at hour ${selectedHour}: ${isOccupied}`);
+    return isOccupied;
   }, [reservationsData, selectedDate, selectedHour]);
 
   // Get room overlays for the current building and floor
   const getRoomOverlaysData = useCallback(() => {
-    return roomsData.map(room => ({
-      id: room.id,
-      name: room.name,
-      label: room.label || room.name,
-      x: room.x,
-      y: room.y,
-      width: room.width,
-      height: room.height,
-      roomData: room,
-      isOccupied: isRoomOccupiedAtHour(room.id)
-    }));
-  }, [roomsData, isRoomOccupiedAtHour]);
+    const overlays = roomsData.map(room => {
+      const occupied = isRoomOccupiedAtHour(room.id);
+      console.log(`Room ${room.id} (${room.name}) occupied: ${occupied}`);
+      
+      return {
+        id: room.id,
+        name: room.name,
+        label: room.label || room.name,
+        x: room.x,
+        y: room.y,
+        width: room.width,
+        height: room.height,
+        roomData: room,
+        isOccupied: occupied
+      };
+    });
+    
+    console.log(`Generated ${overlays.length} room overlays`);
+    return overlays;
+  }, [roomsData, isRoomOccupiedAtHour]);  
 
   // Handle hour slider change
   const handleHourChange = (event, newValue) => {
@@ -445,7 +520,7 @@ const EnhancedRoomVisualizer = ({
           <Button 
             size="small"
             component={Link}
-            to={`/rooms/${selectedRoomData.id}`}
+            to={`/rooms/${selectedRoomData.id || selectedRoom}`}
           >
             Details
           </Button>
@@ -535,7 +610,17 @@ const EnhancedRoomVisualizer = ({
             aria-labelledby="time-slider"
           />
         </Box>
-        
+       
+        <Box sx={{ mb: 2 }}>
+          <LocalizationProvider dateAdapter={AdapterDateFns}>
+            <DatePicker
+              label="Select Date"
+              value={selectedDate}
+              onChange={(newDate) => setSelectedDate(newDate)}
+              renderInput={(params) => <TextField {...params} fullWidth />}
+            />
+          </LocalizationProvider>
+        </Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
           <Typography variant="caption" color="text.secondary">7:00 AM</Typography>
           <Typography variant="caption" color="text.secondary">11:00 PM</Typography>

@@ -544,6 +544,7 @@ function Rooms() {
           )}
           
           
+          
           {viewMode === 'map' && (
             <>
               <Typography variant="h5" sx={{ mb: 2 }}>
@@ -556,6 +557,7 @@ function Rooms() {
                 <EnhancedRoomVisualizer 
                   rooms={rooms}
                   reservations={reservations}
+                  selectedDate={searchParams?.startTime ? new Date(searchParams.startTime) : new Date()}
                 />
               )}
             </>
