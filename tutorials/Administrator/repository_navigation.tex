@@ -1,0 +1,166 @@
+# RIT Dynamic Room Reservation System (DRRS) - Repository Map
+
+This document provides a comprehensive map of the repository structure for the Dynamic Room Reservation System (DRRS) project, designed to help new developers quickly understand the codebase organization and navigate the project effectively.
+
+## Project Overview
+
+The Dynamic Room Reservation System is a web-based platform that allows students, faculty, and staff at RIT to reserve rooms across campus. The system provides real-time availability information, interactive maps, and booking management features.
+
+## Technology Stack
+
+- **Frontend**: React with Material UI
+- **Backend**: Firebase (Authentication, Firestore Database, Hosting)
+- **State Management**: React Context API
+- **Maps/Visualization**: Custom implementation with SVG floor plans
+
+## Repository Structure
+
+### Root Directory
+
+```
+/
+├── public/                   # Static files and assets
+├── src/                      # Source code 
+├── .firebase/                # Firebase cache and deployment files
+├── .github/                  # GitHub workflows for CI/CD
+├── Project Roadmap.docx      # Project documentation
+└── Vision Statement.pdf      # Project vision document
+```
+
+### Configuration Files
+
+- **`.firebaserc`**: Firebase project configuration identifying the project ID
+- **`firebase.json`**: Main Firebase configuration specifying hosting settings
+- **`package.json`**: Project dependencies and npm scripts
+- **`firestore.rules`**: Security rules for Firestore database
+- **`storage.rules`**: Security rules for Firebase Storage
+- **`firestore.indexes.json`**: Firestore index configurations
+- **`database.rules.json`**: Rules for Firebase Realtime Database
+
+### Source Code Structure (`src/`)
+
+#### Core App Files
+
+- **`src/index.js`**: Entry point that renders the React app with Auth provider
+- **`src/App.js`**: Main component with routing configuration
+- **`src/App.css`** & **`src/index.css`**: Global styling
+- **`src/theme.js`**: Material UI theme configuration with RIT branding colors
+- **`src/reportWebVitals.js`**: Performance monitoring
+
+#### Firebase Configuration
+
+- **`src/firebase/config.js`**: Firebase SDK initialization and exports
+
+#### Context Providers
+
+- **`src/contexts/AuthContext.js`**: Authentication context with user state management
+
+#### Services
+
+- **`src/services/roomService.js`**: Room and reservation management functions
+- **`src/services/userService.js`**: User data and hour request management
+- **`src/services/analyticsService.js`**: Analytics data collection and processing
+- **`src/services/mapService.js`**: Map visualization services and building/floor information
+
+#### Pages
+
+- **`src/pages/Home.js`**: Landing page with featured content and navigation
+- **`src/pages/Rooms.js`**: Room search and listing page with multiple view modes
+- **`src/pages/RoomDetails.js`**: Detailed information about a specific room
+- **`src/pages/AdminPage.js`**: Admin dashboard with analytics and management tools
+- **`src/pages/MyReservations.js`**: User's reservation management page
+
+#### Components
+
+##### Authentication Components
+- **`src/components/auth/Login.js`**: Login form
+- **`src/components/auth/PrivateRoute.js`**: Route protection for authenticated users
+
+##### Layout Components
+- **`src/components/layout/Navbar.js`**: Main navigation bar
+
+##### Room Components
+- **`src/components/rooms/RoomCard.js`**: Card component for displaying room information
+- **`src/components/rooms/RoomSearch.js`**: Search interface for finding available rooms
+- **`src/components/rooms/RoomScheduleView.js`**: Schedule view showing room availability by time
+- **`src/components/rooms/RoomOverlay.js`**: Interactive room overlay for maps
+- **`src/components/rooms/EnhancedRoomVisualizer.js`**: Interactive map visualization
+- **`src/components/rooms/PDFViewer.js`**: PDF viewer for floor plans
+
+##### Booking Components
+- **`src/components/booking/BookingForm.js`**: Form for creating room reservations
+- **`src/components/booking/RequestHoursForm.js`**: Form for requesting additional booking hours
+
+##### Admin Components
+- **`src/components/admin/AdminAnalytics.js`**: Analytics dashboard for administrators
+- **`src/components/admin/RoomAnalytics.js`**: Room-specific analytics
+- **`src/components/admin/AdminRoomLoader.js`**: Tool for loading room data
+- **`src/components/admin/HourRequestsManager.js`**: Management of hour extension requests
+- **`src/components/admin/RoomSelector.js`**: Room selection component for admin interfaces
+- **`src/components/admin/ExportReport.js`**: Export analytics reports
+
+##### Common Components
+- **`src/components/common/EnhancedPDFViewer.js`**: Enhanced PDF viewer with interactive features
+
+#### Utilities
+
+- **`src/utils/analyticsExport.js`**: Functions for exporting analytics data
+- **`src/utils/mapUtils.js`**: Map-related utility functions
+- **`src/utils/floorPlanUtils.js`**: Floor plan utility functions
+- **`src/utils/populateRoomOverlays.js`**: Utilities for managing room overlay data
+- **`src/utils/EnhancedSVGInspector.js`**: Tool for creating room mappings on SVG floor plans
+
+#### Data
+
+- **`src/data/roomOverlays.js`**: Room overlay positioning data for maps
+
+### Public Directory (`public/`)
+
+- **`public/index.html`**: Main HTML file
+- **`public/manifest.json`**: Progressive Web App manifest
+- **`public/robots.txt`**: Search engine crawl rules
+- **`public/images/`**: Static images including:
+  - Campus images
+  - Floor plans (both PDF and SVG formats)
+  - RIT logo
+
+## Core Features
+
+1. **Room Search & Booking**
+   - Find rooms by time, capacity, equipment, building
+   - Multiple view modes (list, schedule, map)
+   - Book rooms with collaborative invitations
+
+2. **Interactive Maps**
+   - Building and floor selection
+   - Real-time room availability visualization
+   - Room details accessible from the map
+
+3. **Reservation Management**
+   - View upcoming, today's, and past reservations
+   - Cancel or modify bookings
+   - Daily booking limits with extension requests
+
+4. **Admin Features**
+   - Analytics dashboard with usage metrics
+   - Room management tools
+   - User hour request approval system
+   - Report generation and export
+
+## Development Workflow
+
+1. The app uses React Router for navigation between pages
+2. Authentication state is managed through the AuthContext
+3. Firebase services are accessed through dedicated service modules
+4. Room data and reservations are stored in Firestore collections
+5. Continuous deployment is handled through GitHub Actions workflows
+
+## Getting Started for New Developers
+
+1. Clone the repository
+2. Run `npm install` to install dependencies
+3. Create a `.env` file with Firebase configuration (ask team lead for details)
+4. Run `npm start` to start the development server
+5. For admin access, your email needs to be added to the `admin` collection in Firestore
+
+This repository map should help you understand the structure and organization of the DRRS project. For more detailed information, refer to the Project Roadmap and Vision Statement documents.
