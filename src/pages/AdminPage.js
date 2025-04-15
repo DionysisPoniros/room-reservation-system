@@ -26,6 +26,7 @@ import { getDashboardSummary } from '../services/analyticsService';
 import AdminRoomLoader from '../components/admin/AdminRoomLoader';
 import AdminAnalytics from '../components/admin/AdminAnalytics';
 import EnhancedSVGInspector from '../utils/EnhancedSVGInspector';
+import EnhancedRoomManager from '../components/admin/EnhancedRoomManager';
 // Icons
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import BarChartIcon from '@mui/icons-material/BarChart';
@@ -375,7 +376,7 @@ function AdminPage() {
         </Box>
         
         <Box role="tabpanel" hidden={activeTab !== 2}>
-          {activeTab === 2 && <AdminRoomLoader />}
+          {activeTab === 2 && <EnhancedRoomManager />}
         </Box>
         <Box role="tabpanel" hidden={activeTab !== 4}>
           {activeTab === 4 && <HourRequestsManager />}

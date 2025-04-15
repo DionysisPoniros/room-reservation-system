@@ -44,11 +44,12 @@ import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 import { collection, addDoc, updateDoc, deleteDoc, getDocs, doc, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 
-// Room types and equipment options (could be moved to a config file)
+// Room types and equipment options
 const ROOM_TYPES = [
   "Classroom",
   "Lecture Hall",
@@ -145,8 +146,9 @@ function EnhancedRoomManager() {
   const fetchRooms = async () => {
     try {
       setLoading(true);
+      setError(null);
       
-      // Create query with optional ordering
+      // Create query with ordering
       let roomsQuery = query(collection(db, 'rooms'), orderBy('name'));
       
       const snapshot = await getDocs(roomsQuery);
@@ -155,12 +157,13 @@ function EnhancedRoomManager() {
         ...doc.data()
       }));
       
+      console.log(`Fetched ${roomsData.length} rooms from Firestore`);
       setRooms(roomsData);
       setFilteredRooms(roomsData);
-      setLoading(false);
     } catch (err) {
       console.error("Error fetching rooms:", err);
       setError("Failed to load rooms. Please try again.");
+    } finally {
       setLoading(false);
     }
   };
@@ -240,14 +243,20 @@ function EnhancedRoomManager() {
       return;
     }
     
+    // Add location based on building and floor if not provided
+    let roomToAdd = { ...newRoom };
+    if (!roomToAdd.location && roomToAdd.building && roomToAdd.floor) {
+      roomToAdd.location = `${roomToAdd.building}, ${roomToAdd.floor}`;
+    }
+    
     // Add the room to the queue with a temporary ID
-    setRoomQueue([...roomQueue, { ...newRoom, tempId: Date.now().toString() }]);
+    setRoomQueue([...roomQueue, { ...roomToAdd, tempId: Date.now().toString() }]);
     
     // Reset the form
     setNewRoom({ ...DEFAULT_ROOM });
     
     // Show success message
-    setSuccess("Room added to queue");
+    setSuccess("Room added to queue successfully");
     
     // Switch to the queue tab
     setActiveTab(2);
@@ -256,6 +265,7 @@ function EnhancedRoomManager() {
   // Remove room from queue
   const removeFromQueue = (tempId) => {
     setRoomQueue(roomQueue.filter(room => room.tempId !== tempId));
+    setSuccess("Room removed from queue");
   };
   
   // Edit room in queue
@@ -311,7 +321,6 @@ function EnhancedRoomManager() {
       
       // Switch to the queue tab
       setActiveTab(2);
-      
     } catch (err) {
       console.error("Error parsing JSON:", err);
       setJsonError(`Error processing JSON: ${err.message}`);
@@ -334,9 +343,15 @@ function EnhancedRoomManager() {
         return;
       }
       
+      // Add location based on building and floor if not provided
+      let roomToAdd = { ...room };
+      if (!roomToAdd.location && roomToAdd.building && roomToAdd.floor) {
+        roomToAdd.location = `${roomToAdd.building}, ${roomToAdd.floor}`;
+      }
+      
       // Add the room to the valid rooms with a temporary ID
       validRooms.push({
-        ...room,
+        ...roomToAdd,
         tempId: `json-${Date.now()}-${index}`
       });
     });
@@ -359,19 +374,32 @@ function EnhancedRoomManager() {
       return;
     }
     
+    // Add location based on building and floor if not provided
+    let roomToAdd = { ...roomObject };
+    if (!roomToAdd.location && roomToAdd.building && roomToAdd.floor) {
+      roomToAdd.location = `${roomToAdd.building}, ${roomToAdd.floor}`;
+    }
+    
     // Add the room to the queue with a temporary ID
-    setRoomQueue([...roomQueue, { ...roomObject, tempId: `json-${Date.now()}` }]);
+    setRoomQueue([...roomQueue, { ...roomToAdd, tempId: `json-${Date.now()}` }]);
   };
   
   // Validate a room object
   const validateRoomObject = (room) => {
-    // Must have at least a name and building
-    return room && 
-           typeof room === 'object' && 
-           room.name && 
-           typeof room.name === 'string' &&
-           room.building &&
-           typeof room.building === 'string';
+    // Basic validation: must have name and building
+    if (!room || typeof room !== 'object') return false;
+    
+    if (!room.name || typeof room.name !== 'string') return false;
+    
+    if (!room.building || typeof room.building !== 'string') return false;
+    
+    // Ensure capacity is a number
+    if (room.capacity && isNaN(Number(room.capacity))) return false;
+    
+    // Ensure equipment is an array if provided
+    if (room.equipment && !Array.isArray(room.equipment)) return false;
+    
+    return true;
   };
   
   // Save the queue to the database
@@ -383,6 +411,7 @@ function EnhancedRoomManager() {
     
     try {
       setLoading(true);
+      setError(null);
       
       // Process each room in the queue
       const results = await Promise.all(roomQueue.map(async (room) => {
@@ -391,7 +420,9 @@ function EnhancedRoomManager() {
         
         try {
           // Add room to Firestore
+          console.log(`Adding room to Firestore:`, roomData);
           const docRef = await addDoc(collection(db, 'rooms'), roomData);
+          console.log(`Room added with ID: ${docRef.id}`);
           return { success: true, id: docRef.id, name: room.name };
         } catch (err) {
           console.error(`Error adding room ${room.name}:`, err);
@@ -406,7 +437,7 @@ function EnhancedRoomManager() {
       // Refresh the room list
       await fetchRooms();
       
-      // Clear the queue
+      // Clear the queue on success
       setRoomQueue([]);
       
       // Show success message
@@ -414,7 +445,6 @@ function EnhancedRoomManager() {
       
       // Switch to the rooms list tab
       setActiveTab(3);
-      
     } catch (err) {
       console.error("Error saving queue:", err);
       setError(`Failed to save rooms: ${err.message}`);
@@ -433,14 +463,32 @@ function EnhancedRoomManager() {
   const saveEditedRoom = () => {
     if (!editRoom) return;
     
-    if (editRoom.tempId) {
+    // Validate the room data
+    if (!editRoom.name) {
+      setError("Room name is required");
+      return;
+    }
+    
+    if (!editRoom.building) {
+      setError("Building is required");
+      return;
+    }
+    
+    // Add location based on building and floor if not provided
+    let roomToSave = { ...editRoom };
+    if (!roomToSave.location && roomToSave.building && roomToSave.floor) {
+      roomToSave.location = `${roomToSave.building}, ${roomToSave.floor}`;
+    }
+    
+    if (roomToSave.tempId) {
       // Update room in queue
       setRoomQueue(roomQueue.map(room => 
-        room.tempId === editRoom.tempId ? editRoom : room
+        room.tempId === roomToSave.tempId ? roomToSave : room
       ));
+      setSuccess("Room updated in queue");
     } else {
       // Update room in database
-      updateRoomInDatabase(editRoom);
+      updateRoomInDatabase(roomToSave);
     }
     
     // Close the dialog
@@ -451,6 +499,7 @@ function EnhancedRoomManager() {
   const updateRoomInDatabase = async (room) => {
     try {
       setLoading(true);
+      setError(null);
       
       // Get a reference to the room document
       const roomRef = doc(db, 'rooms', room.id);
@@ -459,14 +508,15 @@ function EnhancedRoomManager() {
       const { id, ...roomData } = room;
       
       // Update the document
+      console.log(`Updating room ${id} in Firestore:`, roomData);
       await updateDoc(roomRef, roomData);
+      console.log(`Room ${id} updated successfully`);
       
       // Refresh the room list
       await fetchRooms();
       
       // Show success message
       setSuccess(`Room ${room.name} updated successfully`);
-      
     } catch (err) {
       console.error(`Error updating room ${room.name}:`, err);
       setError(`Failed to update room: ${err.message}`);
@@ -493,9 +543,14 @@ function EnhancedRoomManager() {
     
     try {
       setLoading(true);
+      setError(null);
+      
+      console.log(`Deleting room ${roomToDelete.id} from Firestore`);
       
       // Delete the room document
       await deleteDoc(doc(db, 'rooms', roomToDelete.id));
+      
+      console.log(`Room ${roomToDelete.id} deleted successfully`);
       
       // Refresh the room list
       await fetchRooms();
@@ -506,7 +561,6 @@ function EnhancedRoomManager() {
       // Close the dialog
       setDeleteConfirmOpen(false);
       setRoomToDelete(null);
-      
     } catch (err) {
       console.error(`Error deleting room ${roomToDelete.name}:`, err);
       setError(`Failed to delete room: ${err.message}`);
@@ -563,7 +617,6 @@ function EnhancedRoomManager() {
     return Array.from(types).sort();
   };
   
-  // Render the component
   return (
     <Box>
       <Typography variant="h5" gutterBottom>
@@ -788,7 +841,7 @@ function EnhancedRoomManager() {
                 color="primary"
                 onClick={saveQueue}
                 disabled={roomQueue.length === 0 || loading}
-                startIcon={loading ? <CircularProgress size={24} /> : <SaveIcon />}
+                startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
               >
                 Save All to Database
               </Button>
@@ -1187,8 +1240,5 @@ function EnhancedRoomManager() {
     </Box>
   );
 }
-
-// Need to add the missing RefreshIcon import
-import RefreshIcon from '@mui/icons-material/Refresh';
 
 export default EnhancedRoomManager;
