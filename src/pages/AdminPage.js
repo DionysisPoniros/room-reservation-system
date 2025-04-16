@@ -27,6 +27,9 @@ import AdminRoomLoader from '../components/admin/AdminRoomLoader';
 import AdminAnalytics from '../components/admin/AdminAnalytics';
 import EnhancedSVGInspector from '../utils/EnhancedSVGInspector';
 import EnhancedRoomManager from '../components/admin/EnhancedRoomManager';
+import RoomImageManager from '../components/admin/RoomImageManager';
+import HourRequestsManager from '../components/admin/HourRequestsManager';
+import EnhancedSettings from '../components/admin/EnhancedSettings';
 // Icons
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import BarChartIcon from '@mui/icons-material/BarChart';
@@ -36,9 +39,9 @@ import WarningIcon from '@mui/icons-material/Warning';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PeopleIcon from '@mui/icons-material/People';
 import EventIcon from '@mui/icons-material/Event';
-import HourRequestsManager from '../components/admin/HourRequestsManager';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import MapIcon from '@mui/icons-material/Map';
+import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
 
 function AdminPage() {
   const { currentUser } = useAuth();
@@ -229,38 +232,6 @@ function AdminPage() {
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, mb: 3 }}>
               <Typography variant="h6" gutterBottom>
-                Quick Access
-              </Typography>
-              <Typography paragraph>
-                Welcome to the admin dashboard. Here you can manage rooms, view analytics, and configure system settings.
-              </Typography>
-              <Typography paragraph>
-                Use the tabs above to navigate between different sections of the admin panel.
-              </Typography>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
-                <Button 
-                  variant="outlined" 
-                  color="primary" 
-                  startIcon={<BarChartIcon />}
-                  onClick={() => setActiveTab(1)}
-                >
-                  View Analytics
-                </Button>
-                <Button 
-                  variant="outlined" 
-                  color="primary" 
-                  startIcon={<MeetingRoomIcon />}
-                  onClick={() => setActiveTab(2)}
-                >
-                  Manage Rooms
-                </Button>
-              </Box>
-            </Paper>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 3, mb: 3 }}>
-              <Typography variant="h6" gutterBottom>
                 System Status
               </Typography>
               
@@ -346,23 +317,32 @@ function AdminPage() {
               id="tab-3" 
             />
             <Tab 
-            label={
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <AccessTimeIcon sx={{ mr: 1 }} fontSize="small" />
-                Hour Requests
-              </Box>
-            } 
-            id="tab-4" 
-          />
-          <Tab 
-            label={
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <MapIcon sx={{ mr: 1 }} fontSize="small" />
-                SVG Mapping
-              </Box>
-            } 
-            id="tab-5" 
-          />
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <AccessTimeIcon sx={{ mr: 1 }} fontSize="small" />
+                  Hour Requests
+                </Box>
+              } 
+              id="tab-4" 
+            />
+            <Tab 
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <MapIcon sx={{ mr: 1 }} fontSize="small" />
+                  SVG Mapping
+                </Box>
+              } 
+              id="tab-5" 
+            />
+            <Tab 
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <PhotoLibraryIcon sx={{ mr: 1 }} fontSize="small" />
+                  Room Images
+                </Box>
+              } 
+              id="tab-6" 
+            />
           </Tabs>
         </Box>
         
@@ -378,29 +358,21 @@ function AdminPage() {
         <Box role="tabpanel" hidden={activeTab !== 2}>
           {activeTab === 2 && <EnhancedRoomManager />}
         </Box>
+        
+        <Box role="tabpanel" hidden={activeTab !== 3}>
+          {activeTab === 3 && <EnhancedSettings />}
+        </Box>
+        
         <Box role="tabpanel" hidden={activeTab !== 4}>
           {activeTab === 4 && <HourRequestsManager />}
         </Box>
+        
         <Box role="tabpanel" hidden={activeTab !== 5}>
           {activeTab === 5 && <EnhancedSVGInspector />}
         </Box>
-        <Box role="tabpanel" hidden={activeTab !== 3}>
-          {activeTab === 3 && (
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Settings
-              </Typography>
-              <Typography paragraph>
-                System settings will be available in a future update.
-              </Typography>
-              <ul>
-                <li>User management</li>
-                <li>System configuration</li>
-                <li>Notification settings</li>
-                <li>Access control</li>
-              </ul>
-            </Paper>
-          )}
+        
+        <Box role="tabpanel" hidden={activeTab !== 6}>
+          {activeTab === 6 && <RoomImageManager />}
         </Box>
       </Box>
     </Container>
