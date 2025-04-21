@@ -1,4 +1,4 @@
-// src/App.js
+// Modified App.js
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
@@ -6,7 +6,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 
-import theme from './theme'; // Import our custom theme
+import theme from './theme';
 import Navbar from './components/layout/Navbar';
 import Home from './pages/Home';
 import Rooms from './pages/Rooms';
@@ -28,9 +28,23 @@ function App() {
           <BrowserRouter>
             <Navbar />
             <Routes>
+              {/* Public routes */}
+              <Route path="/login" element={<Login />} />
+              
+              {/* You can keep the home page public if you want */}
               <Route path="/" element={<Home />} />
-              <Route path="/rooms" element={<Rooms />} />
-              <Route path="/rooms/:id" element={<RoomDetails />} />
+              
+              {/* Protected routes */}
+              <Route path="/rooms" element={
+                <PrivateRoute>
+                  <Rooms />
+                </PrivateRoute>
+              } />
+              <Route path="/rooms/:id" element={
+                <PrivateRoute>
+                  <RoomDetails />
+                </PrivateRoute>
+              } />
               <Route path="/rooms/:id/book" element={
                 <PrivateRoute>
                   <BookingForm />
@@ -51,7 +65,6 @@ function App() {
                   <EnhancedSVGInspector />
                 </PrivateRoute>
               } />
-              <Route path="/login" element={<Login />} />
             </Routes>
           </BrowserRouter>
         </ThemeProvider>
